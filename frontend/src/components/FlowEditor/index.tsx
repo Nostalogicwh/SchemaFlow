@@ -1,0 +1,261 @@
+/**
+ * 可视化工作流编辑器
+ */
+import { useCallback, useEffect, useState, useRef } from 'react'
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  MiniMap,
+  addEdge,
+  useNodesState,
+  useEdgesState,
+  type Connection,
+  type Node,
+  type Edge,
+  type OnConnect,
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
+
+import { nodeTypes, nodeCategoryMap } from './nodes'
+import { NodePanel } from './panels/NodePanel'
+import { Toolbar } from './panels/Toolbar'
+import type { ActionMetadata, Workflow, WorkflowNode, WorkflowEdge, NodeStatus } from '@/types/workflow'
+import { actionApi } from '@/api'
+
+// 节点数据类型
+type FlowNodeData = {
+  label: string
+  category: string
+  config: Record<string, unknown>
+  status: NodeStatus
+  [key: string]: unknown
+}
+
+type FlowNode = Node<FlowNodeData>
+
+interface FlowEditorProps {
+  workflow: Workflow | null
+  nodeStatuses?: Record<string, NodeStatus>
+  onSave?: (workflow: Workflow) => void
+}
+
+// 将后端工作流格式转换为 ReactFlow 格式
+function workflowToFlow(workflow: Workflow): { nodes: FlowNode[]; edges: Edge[] } {
+  const nodes: FlowNode[] = workflow.nodes.map((node, index) => ({
+    id: node.id,
+    type: node.type,
+    position: { x: 100 + index * 200, y: 100 + (index % 2) * 100 },
+    data: {
+      label: node.type,
+      category: nodeCategoryMap[node.type] || 'base',
+      config: node.config,
+      status: 'idle' as NodeStatus,
+    },
+  }))
+
+  const edges: Edge[] = workflow.edges.map((edge, index) => ({
+    id: `e${index}`,
+    source: edge.source,
+    target: edge.target,
+    animated: false,
+  }))
+
+  return { nodes, edges }
+}
+
+// 将 ReactFlow 格式转换为后端工作流格式
+function flowToWorkflow(
+  nodes: FlowNode[],
+  edges: Edge[],
+  baseWorkflow: Workflow
+): Workflow {
+  const workflowNodes: WorkflowNode[] = nodes.map((node) => ({
+    id: node.id,
+    type: node.type!,
+    config: node.data.config || {},
+  }))
+
+  const workflowEdges: WorkflowEdge[] = edges.map((edge) => ({
+    source: edge.source,
+    target: edge.target,
+  }))
+
+  return {
+    ...baseWorkflow,
+    nodes: workflowNodes,
+    edges: workflowEdges,
+    updated_at: new Date().toISOString(),
+  }
+}
+
+export function FlowEditor({ workflow, nodeStatuses = {}, onSave }: FlowEditorProps) {
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
+  const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null)
+  const [actions, setActions] = useState<ActionMetadata[]>([])
+  const reactFlowWrapper = useRef<HTMLDivElement>(null)
+  const nodeIdCounter = useRef(1)
+
+  // 加载节点元数据
+  useEffect(() => {
+    actionApi.list().then(setActions).catch(console.error)
+  }, [])
+
+  // 加载工作流
+  useEffect(() => {
+    if (workflow) {
+      const { nodes: flowNodes, edges: flowEdges } = workflowToFlow(workflow)
+      setNodes(flowNodes)
+      setEdges(flowEdges)
+      nodeIdCounter.current = flowNodes.length + 1
+    }
+  }, [workflow, setNodes, setEdges])
+
+  // 更新节点状态
+  useEffect(() => {
+    setNodes((nds) =>
+      nds.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          status: nodeStatuses[node.id] || 'idle',
+        },
+      }))
+    )
+  }, [nodeStatuses, setNodes])
+
+  // 连线
+  const onConnect: OnConnect = useCallback(
+    (connection: Connection) => {
+      setEdges((eds) => addEdge(connection, eds))
+    },
+    [setEdges]
+  )
+
+  // 选中节点
+  const onNodeClick = useCallback((_: React.MouseEvent, node: FlowNode) => {
+    setSelectedNode(node)
+  }, [])
+
+  // 取消选中
+  const onPaneClick = useCallback(() => {
+    setSelectedNode(null)
+  }, [])
+
+  // 更新节点配置
+  const handleUpdateNode = useCallback(
+    (nodeId: string, config: Record<string, unknown>) => {
+      setNodes((nds) =>
+        nds.map((node) =>
+          node.id === nodeId
+            ? { ...node, data: { ...node.data, config } }
+            : node
+        )
+      )
+      // 同步更新选中节点
+      setSelectedNode((prev) =>
+        prev?.id === nodeId
+          ? { ...prev, data: { ...prev.data, config } }
+          : prev
+      )
+    },
+    [setNodes]
+  )
+
+  // 拖放添加节点
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  }, [])
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault()
+
+      const data = event.dataTransfer.getData('application/reactflow')
+      if (!data) return
+
+      const action: ActionMetadata = JSON.parse(data)
+      const bounds = reactFlowWrapper.current?.getBoundingClientRect()
+      if (!bounds) return
+
+      const position = {
+        x: event.clientX - bounds.left,
+        y: event.clientY - bounds.top,
+      }
+
+      const newNode: FlowNode = {
+        id: `node_${nodeIdCounter.current++}`,
+        type: action.name,
+        position,
+        data: {
+          label: action.label,
+          category: action.category,
+          config: {},
+          status: 'idle' as NodeStatus,
+        },
+      }
+
+      setNodes((nds) => [...nds, newNode])
+    },
+    [setNodes]
+  )
+
+  // 保存工作流
+  const handleSave = useCallback(() => {
+    if (!workflow || !onSave) return
+    const updatedWorkflow = flowToWorkflow(nodes, edges, workflow)
+    onSave(updatedWorkflow)
+  }, [workflow, nodes, edges, onSave])
+
+  return (
+    <div className="flex h-full">
+      {/* 左侧工具栏 */}
+      <div className="w-48 border-r bg-white">
+        <Toolbar actions={actions} />
+      </div>
+
+      {/* 中间画布 */}
+      <div className="flex-1 h-full" ref={reactFlowWrapper} style={{ minHeight: '400px' }}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onNodeClick={onNodeClick}
+          onPaneClick={onPaneClick}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+          nodeTypes={nodeTypes}
+          fitView
+        >
+          <Background />
+          <Controls />
+          <MiniMap />
+        </ReactFlow>
+      </div>
+
+      {/* 右侧属性面板 */}
+      <div className="w-72 border-l bg-white overflow-y-auto">
+        <div className="p-2 border-b flex justify-between items-center">
+          <span className="font-medium text-sm">属性</span>
+          {onSave && (
+            <button
+              onClick={handleSave}
+              className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+            >
+              保存
+            </button>
+          )}
+        </div>
+        <NodePanel
+          selectedNode={selectedNode}
+          actionMetadata={actions}
+          onUpdateNode={handleUpdateNode}
+        />
+      </div>
+    </div>
+  )
+}

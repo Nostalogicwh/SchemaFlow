@@ -1,0 +1,155 @@
+"""执行上下文 - 管理单个工作流执行周期的状态。"""
+import asyncio
+from datetime import datetime
+from enum import Enum
+from pathlib import Path
+from typing import Optional, Dict, Any, List
+import base64
+
+
+class ExecutionStatus(str, Enum):
+    """执行状态枚举。"""
+    PENDING = "pending"
+    RUNNING = "running"
+    PAUSED = "paused"       # 等待用户输入
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ExecutionContext:
+    """执行上下文。
+
+    管理单个工作流执行周期的所有状态：
+    - 浏览器实例
+    - 变量上下文
+    - 剪贴板内容
+    - WebSocket 连接
+    - 执行日志
+    - 截图记录
+    """
+
+    def __init__(
+        self,
+        execution_id: str,
+        workflow_id: str,
+        browser=None,
+        websocket=None,
+        data_dir: Path = None
+    ):
+        """初始化执行上下文。
+
+        Args:
+            execution_id: 执行 ID
+            workflow_id: 工作流 ID
+            browser: 浏览器实例
+            websocket: WebSocket 连接
+            data_dir: 数据目录
+        """
+        self.execution_id = execution_id
+        self.workflow_id = workflow_id
+
+        # 状态
+        self.status = ExecutionStatus.PENDING
+        self.start_time: Optional[datetime] = None
+        self.end_time: Optional[datetime] = None
+        self.current_node_id: Optional[str] = None
+        self.error: Optional[str] = None
+
+        # 资源
+        self.browser = browser
+        self.page = None
+        self.websocket = websocket
+        self.data_dir = data_dir or Path("./data")
+
+        # 数据
+        self.variables: Dict[str, Any] = {}
+        self.clipboard: Optional[str] = None
+
+        # 记录
+        self.logs: List[Dict[str, Any]] = []
+        self.screenshots: List[Dict[str, Any]] = []
+        self.recorded_actions: List[Dict[str, Any]] = []
+
+        # 用户输入控制
+        self._user_input_event = asyncio.Event()
+        self._user_input_response: Optional[str] = None
+
+    async def send_screenshot(self):
+        """发送截图到前端。"""
+        if self.page and self.websocket:
+            try:
+                screenshot = await self.page.screenshot(type="jpeg", quality=60)
+                base64_data = base64.b64encode(screenshot).decode()
+                await self.websocket.send_json({
+                    "type": "screenshot",
+                    "node_id": self.current_node_id,
+                    "data": base64_data,
+                    "timestamp": datetime.now().isoformat()
+                })
+            except Exception as e:
+                self.log("error", f"发送截图失败: {e}")
+
+    async def request_user_input(self, prompt: str, timeout: int = 300):
+        """请求用户输入。
+
+        Args:
+            prompt: 提示信息
+            timeout: 超时时间（秒）
+
+        Returns:
+            用户响应
+        """
+        if self.websocket:
+            await self.websocket.send_json({
+                "type": "user_input_required",
+                "node_id": self.current_node_id,
+                "prompt": prompt,
+                "timeout": timeout
+            })
+
+            try:
+                await asyncio.wait_for(self._user_input_event.wait(), timeout=timeout)
+                return self._user_input_response
+            except asyncio.TimeoutError:
+                raise TimeoutError("用户输入超时")
+        return None
+
+    def respond_user_input(self, response: str):
+        """响应用户输入。
+
+        Args:
+            response: 用户响应内容
+        """
+        self._user_input_response = response
+        self._user_input_event.set()
+        self._user_input_event = asyncio.Event()
+
+    def log(self, level: str, message: str):
+        """记录日志。
+
+        Args:
+            level: 日志级别 (info, warning, error)
+            message: 日志消息
+        """
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "level": level,
+            "message": message,
+            "node_id": self.current_node_id
+        }
+        self.logs.append(log_entry)
+
+    def record_action(self, action_type: str, details: Dict[str, Any]):
+        """录制动作（用于 AI 节点转为确定性节点）。
+
+        Args:
+            action_type: 动作类型
+            details: 动作详情
+        """
+        self.recorded_actions.append({
+            "type": action_type,
+            "details": details,
+            "node_id": self.current_node_id,
+            "timestamp": datetime.now().isoformat()
+        })

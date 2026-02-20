@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SchemaFlow 连接测试</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 { color: #333; }
+    .panel { background: white; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .panel h2 { margin-top: 0; font-size: 16px; color: #666; }
+    button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; margin-bottom: 8px; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-success { background: #22c55e; color: white; }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-secondary { background: #6b7280; color: white; }
+    .status { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+    .status-connected { background: #dcfce7; color: #166534; }
+    .status-disconnected { background: #fee2e2; color: #991b1b; }
+    .status-running { background: #dbeafe; color: #1e40af; }
+    #log { background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 4px; height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+    .log-info { color: #9cdcfe; }
+    .log-success { color: #4ec9b0; }
+    .log-error { color: #f14c4c; }
+    .log-warn { color: #cca700; }
+    #screenshot { max-width: 100%; max-height: 400px; border: 1px solid #ddd; border-radius: 4px; }
+    .flex { display: flex; gap: 16px; }
+    .flex-1 { flex: 1; }
+    select, input { padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-right: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔧 SchemaFlow 连接测试</h1>
+
+    <!-- 状态面板 -->
+    <div class="panel">
+      <h2>连接状态</h2>
+      <p>
+        API: <span id="apiStatus" class="status status-disconnected">未检测</span>
+        WebSocket: <span id="wsStatus" class="status status-disconnected">未连接</span>
+        执行: <span id="execStatus" class="status status-disconnected">空闲</span>
+      </p>
+      <button class="btn-primary" onclick="checkApi()">检测 API</button>
+      <button class="btn-secondary" onclick="loadWorkflows()">加载工作流</button>
+    </div>
+
+    <!-- 工作流选择 -->
+    <div class="panel">
+      <h2>工作流</h2>
+      <select id="workflowSelect" style="width: 300px;">
+        <option value="">-- 选择工作流 --</option>
+      </select>
+      <button class="btn-primary" onclick="createTestWorkflow()">创建测试工作流</button>
+      <button class="btn-success" onclick="executeWorkflow()" id="btnExecute" disabled>执行</button>
+      <button class="btn-danger" onclick="stopExecution()" id="btnStop" disabled>停止</button>
+    </div>
+
+    <div class="flex">
+      <!-- 日志面板 -->
+      <div class="panel flex-1">
+        <h2>执行日志</h2>
+        <div id="log"></div>
+        <button class="btn-secondary" onclick="clearLog()" style="margin-top: 8px;">清空日志</button>
+      </div>
+
+      <!-- 截图面板 -->
+      <div class="panel" style="width: 400px;">
+        <h2>实时截图</h2>
+        <div id="screenshotContainer" style="text-align: center; min-height: 200px; display: flex; align-items: center; justify-content: center; color: #999;">
+          执行后显示截图
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api';
+    let ws = null;
+    let currentExecutionId = null;
+    let currentWorkflowId = null;
+
+    // 日志函数
+    function log(message, type = 'info') {
+      const logEl = document.getElementById('log');
+      const time = new Date().toLocaleTimeString();
+      const className = `log-${type}`;
+      logEl.innerHTML += `<div class="${className}">[${time}] ${message}</div>`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    // 更新状态显示
+    function updateStatus(id, connected, text) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = `status ${connected ? 'status-connected' : 'status-disconnected'}`;
+    }
+
+    // 检测 API
+    async function checkApi() {
+      try {
+        log('检测 API 连接...');
+        const resp = await fetch(`${API_BASE}/actions`);
+        const actions = await resp.json();
+        log(`API 正常，可用节点: ${actions.length} 个`, 'success');
+        updateStatus('apiStatus', true, '已连接');
+        return true;
+      } catch (e) {
+        log(`API 连接失败: ${e.message}`, 'error');
+        updateStatus('apiStatus', false, '连接失败');
+        return false;
+      }
+    }
+
+    // 加载工作流列表
+    async function loadWorkflows() {
+      try {
+        log('加载工作流列表...');
+        const resp = await fetch(`${API_BASE}/workflows`);
+        const workflows = await resp.json();
+
+        const select = document.getElementById('workflowSelect');
+        select.innerHTML = '<option value="">-- 选择工作流 --</option>';
+        workflows.forEach(wf => {
+          select.innerHTML += `<option value="${wf.id}">${wf.name}</option>`;
+        });
+
+        log(`加载了 ${workflows.length} 个工作流`, 'success');
+        document.getElementById('btnExecute').disabled = false;
+      } catch (e) {
+        log(`加载工作流失败: ${e.message}`, 'error');
+      }
+    }
+
+    // 创建测试工作流
+    async function createTestWorkflow() {
+      try {
+        log('创建测试工作流...');
+        const workflow = {
+          name: '测试工作流-' + Date.now(),
+          description: '自动创建的测试工作流',
+          nodes: [
+            { id: 'start_1', type: 'start', config: {} },
+            { id: 'open_1', type: 'open_tab', config: { url: 'https://www.baidu.com' } },
+            { id: 'wait_1', type: 'wait', config: { seconds: 2 } },
+            { id: 'screenshot_1', type: 'screenshot', config: {} },
+            { id: 'end_1', type: 'end', config: {} }
+          ],
+          edges: [
+            { source: 'start_1', target: 'open_1' },
+            { source: 'open_1', target: 'wait_1' },
+            { source: 'wait_1', target: 'screenshot_1' },
+            { source: 'screenshot_1', target: 'end_1' }
+          ]
+        };
+
+        const resp = await fetch(`${API_BASE}/workflows`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(workflow)
+        });
+        const created = await resp.json();
+        log(`创建成功，ID: ${created.id}`, 'success');
+
+        await loadWorkflows();
+        document.getElementById('workflowSelect').value = created.id;
+      } catch (e) {
+        log(`创建工作流失败: ${e.message}`, 'error');
+      }
+    }
+
+    // 执行工作流
+    async function executeWorkflow() {
+      const workflowId = document.getElementById('workflowSelect').value;
+      if (!workflowId) {
+        log('请先选择工作流', 'warn');
+        return;
+      }
+
+      try {
+        // 1. 获取 execution_id
+        log(`启动工作流执行: ${workflowId}`);
+        const resp = await fetch(`${API_BASE}/workflows/${workflowId}/execute`, { method: 'POST' });
+        const { execution_id } = await resp.json();
+        currentExecutionId = execution_id;
+        currentWorkflowId = workflowId;
+        log(`获取执行 ID: ${execution_id}`, 'success');
+
+        // 2. 连接 WebSocket
+        connectWebSocket(execution_id, workflowId);
+      } catch (e) {
+        log(`启动执行失败: ${e.message}`, 'error');
+      }
+    }
+
+    // 连接 WebSocket
+    function connectWebSocket(executionId, workflowId) {
+      if (ws) {
+        ws.close();
+      }
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/api/ws/execution/${executionId}`;
+      log(`连接 WebSocket: ${wsUrl}`);
+
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        log('WebSocket 已连接', 'success');
+        updateStatus('wsStatus', true, '已连接');
+
+        // 发送开始执行命令
+        log('发送 start_execution 命令...');
+        ws.send(JSON.stringify({
+          type: 'start_execution',
+          workflow_id: workflowId
+        }));
+
+        document.getElementById('btnExecute').disabled = true;
+        document.getElementById('btnStop').disabled = false;
+        updateStatus('execStatus', true, '执行中');
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        handleMessage(data);
+      };
+
+      ws.onerror = (error) => {
+        log(`WebSocket 错误: ${error}`, 'error');
+        updateStatus('wsStatus', false, '错误');
+      };
+
+      ws.onclose = () => {
+        log('WebSocket 已断开');
+        updateStatus('wsStatus', false, '已断开');
+        document.getElementById('btnExecute').disabled = false;
+        document.getElementById('btnStop').disabled = true;
+      };
+    }
+
+    // 处理 WebSocket 消息
+    function handleMessage(data) {
+      switch (data.type) {
+        case 'connected':
+          log(`连接确认: ${data.execution_id}`, 'success');
+          break;
+        case 'execution_started':
+          log(`执行开始，节点顺序: ${data.node_order?.join(' → ')}`, 'success');
+          break;
+        case 'node_start':
+          log(`→ 节点开始: ${data.node_id} (${data.node_type})`);
+          break;
+        case 'node_complete':
+          if (data.success) {
+            log(`✓ 节点完成: ${data.node_id}`, 'success');
+          } else {
+            log(`✗ 节点失败: ${data.node_id} - ${data.error}`, 'error');
+          }
+          break;
+        case 'screenshot':
+          log(`📷 收到截图 (${data.data?.length || 0} bytes)`);
+          showScreenshot(data.data);
+          break;
+        case 'log':
+          log(`[${data.level}] ${data.message}`, data.level === 'error' ? 'error' : 'info');
+          break;
+        case 'execution_complete':
+          log(`执行完成！成功: ${data.success}, 耗时: ${data.duration?.toFixed(2)}s`, data.success ? 'success' : 'error');
+          updateStatus('execStatus', false, '已完成');
+          document.getElementById('btnExecute').disabled = false;
+          document.getElementById('btnStop').disabled = true;
+          break;
+        case 'error':
+          log(`错误: ${data.message}`, 'error');
+          updateStatus('execStatus', false, '错误');
+          break;
+        default:
+          log(`未知消息: ${data.type}`);
+      }
+    }
+
+    // 显示截图
+    function showScreenshot(base64Data) {
+      const container = document.getElementById('screenshotContainer');
+      if (base64Data) {
+        container.innerHTML = `<img id="screenshot" src="data:image/png;base64,${base64Data}" alt="截图">`;
+      }
+    }
+
+    // 停止执行
+    function stopExecution() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        log('发送停止命令...');
+        ws.send(JSON.stringify({ type: 'stop_execution' }));
+      }
+    }
+
+    // 页面加载时检测
+    window.onload = async () => {
+      log('页面加载完成，开始检测...');
+      await checkApi();
+      await loadWorkflows();
+    };
+  </script>
+</body>
+</html>

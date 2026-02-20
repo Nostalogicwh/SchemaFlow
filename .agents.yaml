@@ -1,0 +1,46 @@
+# 代码风格和规范
+
+## 语言
+- 这是一个中文项目
+- 所有代码注释必须使用中文
+- 变量名和函数名使用英文（驼峰命名）
+- 文档字符串使用中文
+
+## Python 代码规范
+- 遵循 PEP 8 规范
+- 使用 4 空格缩进
+- 函数和类需要添加中文文档字符串
+- 复杂逻辑添加中文注释
+
+## TypeScript 代码规范
+- 使用 2 空格缩进
+- 组件和函数添加中文注释
+- 类型定义使用中文注释说明用途
+
+## 示例
+
+```python
+# 正确
+def execute_click(context: ExecutionContext, config: Dict[str, Any]) -> None:
+    """执行点击操作。
+
+    Args:
+        context: 执行上下文
+        config: 节点配置，包含 selector 或 ai_target
+    """
+    selector = config.get("selector")
+    if selector:
+        await context.page.click(selector)
+```
+
+```typescript
+// 正确
+interface WorkflowNode {
+  /** 节点唯一标识 */
+  id: string;
+  /** 节点类型 */
+  type: string;
+  /** 节点配置 */
+  config: Record<string, any>;
+}
+```
