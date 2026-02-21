@@ -134,10 +134,23 @@ class WorkflowExecutor:
         if context.browser is None and context.page is None:
             from playwright.async_api import async_playwright
             self.playwright = await async_playwright().start()
-            context.browser = await self.playwright.chromium.launch(
-                headless=False  # 有头模式，用户可见
-            )
-            context.page = await context.browser.new_page()
+            try:
+                # 优先通过 CDP 连接用户本地浏览器，保留登录态
+                cdp_url = "http://localhost:9222"
+                context.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
+                # CDP 连接返回的 Browser 至少有一个默认 context
+                default_context = context.browser.contexts[0]
+                context.page = await default_context.new_page()
+                context._is_cdp = True
+                await context.log("info", "已连接本地浏览器（CDP 模式）")
+            except Exception:
+                # 降级：启动独立浏览器（无登录态）
+                context.browser = await self.playwright.chromium.launch(
+                    headless=False
+                )
+                context.page = await context.browser.new_page()
+                context._is_cdp = False
+                await context.log("warn", "未检测到本地浏览器调试端口，已启动独立浏览器（无登录态）")
         elif context.browser is not None and context.page is None:
             # 外部传入 browser 但没有 page，创建新页面
             context.page = await context.browser.new_page()
@@ -270,8 +283,16 @@ class WorkflowExecutor:
         """
         context.end_time = datetime.now()
 
-        # 关闭浏览器（如果是由执行器创建的）
-        if hasattr(self, 'playwright'):
+        # CDP 模式：只关闭页面，不关闭浏览器（浏览器属于用户）
+        # 独立模式：关闭整个 playwright 进程
+        is_cdp = getattr(context, '_is_cdp', False)
+        if is_cdp:
+            try:
+                if context.page and not context.page.is_closed():
+                    await context.page.close()
+            except Exception:
+                pass
+        elif hasattr(self, 'playwright'):
             try:
                 await self.playwright.stop()
             except Exception:
