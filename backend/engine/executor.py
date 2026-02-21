@@ -6,10 +6,11 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 from pathlib import Path
 
-from .context import ExecutionContext, ExecutionStatus, NodeExecutionRecord
-from .constants import NodeStatus, WSMessageType
+from .context import ExecutionContext, ExecutionStatus
+from .constants import WSMessageType
 from .actions import registry
-from repository import get_execution_repo
+from .browser_manager import BrowserManager
+from .execution_recorder import ExecutionRecorder
 
 
 def topological_sort(nodes: List[Dict], edges: List[Dict]) -> List[str]:
@@ -22,12 +23,10 @@ def topological_sort(nodes: List[Dict], edges: List[Dict]) -> List[str]:
     Returns:
         排序后的节点 ID 列表
     """
-    # 构建邻接表和入度表
     node_ids = {node["id"] for node in nodes}
     adj = {node_id: [] for node_id in node_ids}
     in_degree = {node_id: 0 for node_id in node_ids}
 
-    # 构建图
     for edge in edges:
         source = edge.get("source")
         target = edge.get("target")
@@ -35,7 +34,6 @@ def topological_sort(nodes: List[Dict], edges: List[Dict]) -> List[str]:
             adj[source].append(target)
             in_degree[target] += 1
 
-    # Kahn 算法
     queue = [node_id for node_id, degree in in_degree.items() if degree == 0]
     result = []
 
@@ -58,19 +56,12 @@ class WorkflowExecutor:
     """
 
     def __init__(self, action_registry=None, data_dir: Path = None):
-        """初始化执行器。
-
-        Args:
-            action_registry: 动作注册表
-            data_dir: 数据目录
-        """
         self.registry = action_registry or registry
         self.data_dir = data_dir or Path("./data")
         self.active_executions: Dict[str, ExecutionContext] = {}
         self._lock: Optional[asyncio.Lock] = None
 
     def _get_lock(self) -> asyncio.Lock:
-        """获取锁实例（延迟创建以避免线程事件循环问题）。"""
         if self._lock is None:
             self._lock = asyncio.Lock()
         return self._lock
@@ -83,17 +74,6 @@ class WorkflowExecutor:
         execution_id: str = None,
         headless: bool = True
     ) -> ExecutionContext:
-        """执行工作流。
-
-        Args:
-            workflow: 工作流配置
-            websocket: WebSocket 连接（可选）
-            browser: 浏览器实例（可选）
-            execution_id: 执行 ID（可选，不传则自动生成）
-
-        Returns:
-            执行上下文
-        """
         if execution_id is None:
             execution_id = str(uuid.uuid4())
         context = ExecutionContext(
@@ -114,7 +94,6 @@ class WorkflowExecutor:
             context.error = str(e)
             await context.log("error", f"执行失败: {str(e)}")
 
-            # 发送错误消息
             if context.websocket:
                 try:
                     await context.websocket.send_json({
@@ -129,64 +108,26 @@ class WorkflowExecutor:
 
         return context
 
-    async def _run_workflow(self, context: ExecutionContext, workflow: Dict[str, Any], headless: bool = True):
-        """实际执行逻辑。
-
-        Args:
-            context: 执行上下文
-            workflow: 工作流配置
-        """
+    async def _run_workflow(
+        self,
+        context: ExecutionContext,
+        workflow: Dict[str, Any],
+        headless: bool = True
+    ):
         context.status = ExecutionStatus.RUNNING
         context.start_time = datetime.now()
 
-        # 初始化浏览器
-        if context.browser is None and context.page is None:
-            from playwright.async_api import async_playwright
-            self.playwright = await async_playwright().start()
-            try:
-                # 优先通过 CDP 连接用户本地浏览器，保留登录态
-                from config import get_settings
-                cdp_url = get_settings()["browser"]["cdp_url"]
-                context.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
-                default_context = context.browser.contexts[0]
-                await context.log("info", f"CDP 连接成功，contexts 数量: {len(context.browser.contexts)}")
-                existing_pages = default_context.pages
-                await context.log("info", f"已有页面数量: {len(existing_pages)}")
-                for i, p in enumerate(existing_pages):
-                    await context.log("info", f"  页面 {i}: {p.url}")
-                reused = None
-                for p in existing_pages:
-                    if p.url and p.url != "about:blank":
-                        reused = p
-                        break
-                if reused:
-                    context.page = reused
-                    context._reused_page = True
-                    await context.log("info", f"已复用已有页面: {reused.url}")
-                else:
-                    context.page = await default_context.new_page()
-                    context._reused_page = False
-                context._is_cdp = True
-                await context.log("info", "已连接本地浏览器（CDP 模式）")
-            except Exception:
-                # 降级：启动独立浏览器（无登录态）
-                context.browser = await self.playwright.chromium.launch(
-                    headless=headless
-                )
-                context.page = await context.browser.new_page()
-                context._is_cdp = False
-                await context.log("warn", "未检测到本地浏览器调试端口，已启动独立浏览器（无登录态）")
-        elif context.browser is not None and context.page is None:
-            # 外部传入 browser 但没有 page，创建新页面
-            context.page = await context.browser.new_page()
+        browser_mgr = BrowserManager()
+        context._browser_mgr = browser_mgr
+        await browser_mgr.connect(context, headless)
 
-        # 计算执行顺序
-        execution_order = topological_sort(workflow.get("nodes", []), workflow.get("edges", []))
+        execution_order = topological_sort(
+            workflow.get("nodes", []),
+            workflow.get("edges", [])
+        )
 
-        # 构建节点查找表
         nodes_map = {node["id"]: node for node in workflow.get("nodes", [])}
 
-        # 发送开始消息
         if context.websocket:
             await context.websocket.send_json({
                 "type": WSMessageType.EXECUTION_STARTED.value,
@@ -195,9 +136,9 @@ class WorkflowExecutor:
                 "node_order": execution_order
             })
 
-        # 按顺序执行节点
+        recorder = ExecutionRecorder()
+
         for node_id in execution_order:
-            # 检查是否被取消
             if context.status == ExecutionStatus.CANCELLED:
                 break
 
@@ -211,13 +152,7 @@ class WorkflowExecutor:
 
             context.current_node_id = node_id
 
-            record = NodeExecutionRecord(
-                node_id=node_id,
-                node_type=node_type,
-                node_label=node_label,
-                status=NodeStatus.RUNNING.value,
-                started_at=datetime.now().isoformat(),
-            )
+            record = recorder.start_node(node_id, node_type, node_label)
             context.node_records[node_id] = record
 
             if context.websocket:
@@ -227,24 +162,17 @@ class WorkflowExecutor:
                     "node_type": node_type
                 })
 
-            # 获取执行函数
             try:
                 execute_func = self.registry.get_execute_func(node_type)
             except ValueError:
                 raise ValueError(f"未知的节点类型: {node_type}")
 
-            # 变量替换
             resolved_config = self._resolve_variables(config, context.variables)
 
-            # 执行
             try:
                 result = await execute_func(context, resolved_config)
 
-                record.status = NodeStatus.COMPLETED.value
-                record.finished_at = datetime.now().isoformat()
-                record.duration_ms = int((datetime.fromisoformat(record.finished_at) - datetime.fromisoformat(record.started_at)).total_seconds() * 1000)
-                record.result = result if isinstance(result, dict) else {"value": result}
-                record.logs = [log for log in context.logs if log.get("node_id") == node_id]
+                recorder.complete_node(record, result, context.logs)
 
                 if context.websocket:
                     await context.websocket.send_json({
@@ -255,15 +183,10 @@ class WorkflowExecutor:
                         "record": record.to_dict()
                     })
 
-                # 每个节点后发送截图
                 await context.send_screenshot()
 
             except Exception as e:
-                record.status = NodeStatus.FAILED.value
-                record.finished_at = datetime.now().isoformat()
-                record.duration_ms = int((datetime.fromisoformat(record.finished_at) - datetime.fromisoformat(record.started_at)).total_seconds() * 1000)
-                record.error = str(e)
-                record.logs = [log for log in context.logs if log.get("node_id") == node_id]
+                recorder.fail_node(record, str(e), context.logs)
 
                 if context.websocket:
                     await context.websocket.send_json({
@@ -288,42 +211,12 @@ class WorkflowExecutor:
                 "logs": context.logs
             })
 
-        # 持久化执行记录
-        await self._save_execution_record(context, workflow)
-
-    async def _save_execution_record(self, context: ExecutionContext, workflow: Dict[str, Any]):
-        """持久化执行记录到 repository。"""
-        try:
-            repo = get_execution_repo()
-            execution_log = {
-                "execution_id": context.execution_id,
-                "workflow_id": context.workflow_id,
-                "status": context.status.value,
-                "started_at": context.start_time.isoformat() if context.start_time else None,
-                "finished_at": context.end_time.isoformat() if context.end_time else None,
-                "duration_ms": int((context.end_time - context.start_time).total_seconds() * 1000) if context.start_time and context.end_time else None,
-                "total_nodes": len(workflow.get("nodes", [])),
-                "completed_nodes": sum(1 for r in context.node_records.values() if r.status == NodeStatus.COMPLETED.value),
-                "failed_nodes": sum(1 for r in context.node_records.values() if r.status == NodeStatus.FAILED.value),
-                "node_records": [r.to_dict() for r in context.node_records.values()],
-            }
-            await repo.save_execution(execution_log)
-        except Exception as e:
-            await context.log("error", f"保存执行记录失败: {e}")
+        recorder.sync_to_context(context)
+        await recorder.save(context, workflow)
 
     def _resolve_variables(self, config: Any, variables: Dict[str, Any]) -> Any:
-        """解析变量引用 {{variable_name}}。
-
-        Args:
-            config: 原始配置
-            variables: 变量上下文
-
-        Returns:
-            解析后的配置
-        """
         def resolve_value(value):
             if isinstance(value, str):
-                # 替换 {{var}} 语法
                 pattern = r'\{\{(\w+)\}\}'
                 matches = list(re.finditer(pattern, value))
 
@@ -344,41 +237,17 @@ class WorkflowExecutor:
         return resolve_value(config)
 
     async def _cleanup(self, context: ExecutionContext):
-        """清理资源。
-
-        Args:
-            context: 执行上下文
-        """
         context.end_time = datetime.now()
 
-        # CDP 模式：复用的页面不关闭，新建的页面才关闭
-        # 独立模式：关闭整个 playwright 进程
-        is_cdp = getattr(context, '_is_cdp', False)
-        reused = getattr(context, '_reused_page', False)
-        if is_cdp:
-            if not reused:
-                try:
-                    if context.page and not context.page.is_closed():
-                        await context.page.close()
-                except Exception:
-                    pass
-        elif hasattr(self, 'playwright'):
-            try:
-                await self.playwright.stop()
-            except Exception:
-                pass
+        browser_mgr = getattr(context, '_browser_mgr', None)
+        if browser_mgr:
+            await browser_mgr.cleanup(context)
 
-        # 从活跃执行中移除
         async with self._get_lock():
             if context.execution_id in self.active_executions:
                 del self.active_executions[context.execution_id]
 
     async def stop(self, execution_id: str):
-        """停止执行。
-
-        Args:
-            execution_id: 执行 ID
-        """
         async with self._get_lock():
             context = self.active_executions.get(execution_id)
             if context:
@@ -393,23 +262,9 @@ class WorkflowExecutor:
                         pass
 
     async def respond_user_input(self, execution_id: str, response: str):
-        """响应用户输入。
-
-        Args:
-            execution_id: 执行 ID
-            response: 用户响应
-        """
         context = self.active_executions.get(execution_id)
         if context:
             context.respond_user_input(response)
 
     def get_context(self, execution_id: str) -> Optional[ExecutionContext]:
-        """获取执行上下文。
-
-        Args:
-            execution_id: 执行 ID
-
-        Returns:
-            执行上下文
-        """
         return self.active_executions.get(execution_id)
