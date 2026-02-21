@@ -66,7 +66,13 @@ class WorkflowExecutor:
         self.registry = action_registry or registry
         self.data_dir = data_dir or Path("./data")
         self.active_executions: Dict[str, ExecutionContext] = {}
-        self._lock = asyncio.Lock()
+        self._lock: Optional[asyncio.Lock] = None
+
+    def _get_lock(self) -> asyncio.Lock:
+        """获取锁实例（延迟创建以避免线程事件循环问题）。"""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     async def execute(
         self,
@@ -97,7 +103,7 @@ class WorkflowExecutor:
             data_dir=self.data_dir
         )
 
-        async with self._lock:
+        async with self._get_lock():
             self.active_executions[execution_id] = context
 
         try:
@@ -369,7 +375,7 @@ class WorkflowExecutor:
                 pass
 
         # 从活跃执行中移除
-        async with self._lock:
+        async with self._get_lock():
             if context.execution_id in self.active_executions:
                 del self.active_executions[context.execution_id]
 
@@ -379,7 +385,7 @@ class WorkflowExecutor:
         Args:
             execution_id: 执行 ID
         """
-        async with self._lock:
+        async with self._get_lock():
             context = self.active_executions.get(execution_id)
             if context:
                 context.status = ExecutionStatus.CANCELLED
