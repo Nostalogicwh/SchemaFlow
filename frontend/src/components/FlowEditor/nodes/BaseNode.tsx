@@ -4,23 +4,7 @@
 import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import type { NodeStatus } from '@/types/workflow'
-
-// 节点分类对应的颜色
-const categoryColors: Record<string, { bg: string; border: string; text: string }> = {
-  base: { bg: 'bg-gray-100', border: 'border-gray-400', text: 'text-gray-700' },
-  browser: { bg: 'bg-blue-50', border: 'border-blue-400', text: 'text-blue-700' },
-  data: { bg: 'bg-green-50', border: 'border-green-400', text: 'text-green-700' },
-  control: { bg: 'bg-yellow-50', border: 'border-yellow-400', text: 'text-yellow-700' },
-  ai: { bg: 'bg-purple-50', border: 'border-purple-400', text: 'text-purple-700' },
-}
-
-// 状态对应的样式
-const statusStyles: Record<NodeStatus, string> = {
-  idle: '',
-  running: 'ring-2 ring-blue-500 ring-offset-2 animate-pulse',
-  completed: 'ring-2 ring-green-500 ring-offset-2',
-  failed: 'ring-2 ring-red-500 ring-offset-2',
-}
+import { statusStyles, categoryColors } from '@/constants/nodeStyles'
 
 export interface BaseNodeData {
   label: string
