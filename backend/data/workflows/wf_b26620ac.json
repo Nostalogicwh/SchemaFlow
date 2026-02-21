@@ -5,32 +5,92 @@
     {
       "id": "start_1",
       "type": "start",
-      "config": {}
+      "config": {},
+      "position": {
+        "x": 300,
+        "y": 100
+      }
+    },
+    {
+      "id": "node_open_tab_1",
+      "type": "open_tab",
+      "config": {
+        "url": "https://www.deepseek.com/"
+      },
+      "position": {
+        "x": 300,
+        "y": 220
+      }
+    },
+    {
+      "id": "node_wait_for_element_1",
+      "type": "wait_for_element",
+      "config": {
+        "ai_target": "聊天输入框，用于输入消息的文本区域",
+        "timeout": 30
+      },
+      "position": {
+        "x": 300,
+        "y": 340
+      }
+    },
+    {
+      "id": "node_input_text_1",
+      "type": "input_text",
+      "config": {
+        "ai_target": "聊天输入框，用于输入消息的文本区域",
+        "value": "agent",
+        "press_enter": false
+      },
+      "position": {
+        "x": 300,
+        "y": 460
+      }
+    },
+    {
+      "id": "node_click_1",
+      "type": "click",
+      "config": {
+        "ai_target": "发送消息的按钮，通常是纸飞机图标或者发送文字按钮"
+      },
+      "position": {
+        "x": 300,
+        "y": 580
+      }
     },
     {
       "id": "end_1",
       "type": "end",
-      "config": {}
-    },
-    {
-      "id": "node_4",
-      "type": "navigate",
-      "config": {
-        "url": "https://chat.deepseek.com/"
+      "config": {},
+      "position": {
+        "x": 300,
+        "y": 700
       }
     }
   ],
   "edges": [
     {
       "source": "start_1",
-      "target": "node_4"
+      "target": "node_open_tab_1"
     },
     {
-      "source": "node_4",
+      "source": "node_open_tab_1",
+      "target": "node_wait_for_element_1"
+    },
+    {
+      "source": "node_wait_for_element_1",
+      "target": "node_input_text_1"
+    },
+    {
+      "source": "node_input_text_1",
+      "target": "node_click_1"
+    },
+    {
+      "source": "node_click_1",
       "target": "end_1"
     }
   ],
   "id": "wf_b26620ac",
   "created_at": "2026-02-21T00:01:43.044304",
-  "updated_at": "2026-02-21T00:03:10.194047"
+  "updated_at": "2026-02-21T22:26:21.103560"
 }

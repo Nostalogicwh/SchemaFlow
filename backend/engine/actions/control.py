@@ -76,6 +76,9 @@ async def wait_for_element_action(context: Any, config: Dict[str, Any]) -> Dict[
     selector = config.get("selector")
     timeout = config.get("timeout", 30)
 
+    if not selector:
+        raise ValueError("wait_for_element 节点需要提供 selector 参数")
+
     await context.log("info", f"等待元素: {selector} (超时: {timeout}s)")
     await context.page.wait_for_selector(selector, timeout=timeout * 1000)
     return {}
