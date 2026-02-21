@@ -271,7 +271,7 @@ export function Toolbar({ actions, hasNodes = false, onAIGenerate }: ToolbarProp
               当前工作流中有节点，生成新的工作流将<span className="font-semibold text-red-600">替换</span>现有内容。
             </p>
             <p className="text-xs text-neutral-500 mt-1">
-              建议先保存当前工作流，以免丢失已有内容。
+              是否生成新的工作流？
             </p>
           </div>
         </div>
