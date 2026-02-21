@@ -72,6 +72,25 @@ cd backend && python test_backend.py
 3. 前端通过 `GET /api/actions` 自动发现可用节点并渲染到工具栏
 4. 如需特殊渲染，在 `frontend/src/components/FlowEditor/nodes/` 下添加自定义 React 节点组件
 
+## 分支管理
+
+每个版本使用独立的开发分支，完成后合并回 main：
+
+```bash
+# 开始新版本开发
+git checkout main
+git pull
+git checkout -b dev/v{版本号}    # 例如 dev/v0.2
+
+# 开发过程中按阶段提交
+git add . && git commit -m "feat: ..."
+
+# 版本完成后合并
+git checkout main
+git merge dev/v{版本号}
+git tag v{版本号}
+```
+
 ## 提交规范
 
 `feat:` / `fix:` / `docs:` / `style:` / `refactor:` / `test:` / `chore:`
