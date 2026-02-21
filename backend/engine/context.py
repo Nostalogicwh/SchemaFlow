@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 import base64
 
+from .constants import NodeStatus, WSMessageType
+
 
 class ExecutionStatus(str, Enum):
     """执行状态枚举。"""
@@ -24,7 +26,7 @@ class NodeExecutionRecord:
     node_id: str
     node_type: str
     node_label: str
-    status: str = "pending"           # pending | running | completed | failed | skipped
+    status: str = NodeStatus.PENDING.value  # NodeStatus 枚举值
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
     duration_ms: Optional[int] = None
@@ -116,7 +118,7 @@ class ExecutionContext:
                 screenshot = await self.page.screenshot(type="jpeg", quality=60)
                 base64_data = base64.b64encode(screenshot).decode()
                 await self.websocket.send_json({
-                    "type": "screenshot",
+                    "type": WSMessageType.SCREENSHOT.value,
                     "node_id": self.current_node_id,
                     "data": base64_data,
                     "timestamp": datetime.now().isoformat()
@@ -136,7 +138,7 @@ class ExecutionContext:
         """
         if self.websocket:
             await self.websocket.send_json({
-                "type": "user_input_required",
+                "type": WSMessageType.USER_INPUT_REQUIRED.value,
                 "node_id": self.current_node_id,
                 "prompt": prompt,
                 "timeout": timeout
@@ -177,11 +179,10 @@ class ExecutionContext:
         }
         self.logs.append(log_entry)
 
-        # 通过 WebSocket 推送日志
         if self.websocket:
             try:
                 await self.websocket.send_json({
-                    "type": "log",
+                    "type": WSMessageType.LOG.value,
                     **log_entry
                 })
             except Exception:

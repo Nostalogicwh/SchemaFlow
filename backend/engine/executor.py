@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .context import ExecutionContext, ExecutionStatus, NodeExecutionRecord
+from .constants import NodeStatus, WSMessageType
 from .actions import registry
 from repository import get_execution_repo
 
@@ -117,7 +118,7 @@ class WorkflowExecutor:
             if context.websocket:
                 try:
                     await context.websocket.send_json({
-                        "type": "error",
+                        "type": WSMessageType.ERROR.value,
                         "node_id": context.current_node_id,
                         "message": str(e)
                     })
@@ -188,7 +189,7 @@ class WorkflowExecutor:
         # 发送开始消息
         if context.websocket:
             await context.websocket.send_json({
-                "type": "execution_started",
+                "type": WSMessageType.EXECUTION_STARTED.value,
                 "execution_id": context.execution_id,
                 "workflow_id": context.workflow_id,
                 "node_order": execution_order
@@ -210,20 +211,18 @@ class WorkflowExecutor:
 
             context.current_node_id = node_id
 
-            # 创建节点执行记录
             record = NodeExecutionRecord(
                 node_id=node_id,
                 node_type=node_type,
                 node_label=node_label,
-                status="running",
+                status=NodeStatus.RUNNING.value,
                 started_at=datetime.now().isoformat(),
             )
             context.node_records[node_id] = record
 
-            # 发送节点开始消息
             if context.websocket:
                 await context.websocket.send_json({
-                    "type": "node_start",
+                    "type": WSMessageType.NODE_START.value,
                     "node_id": node_id,
                     "node_type": node_type
                 })
@@ -241,17 +240,15 @@ class WorkflowExecutor:
             try:
                 result = await execute_func(context, resolved_config)
 
-                # 更新节点记录
-                record.status = "completed"
+                record.status = NodeStatus.COMPLETED.value
                 record.finished_at = datetime.now().isoformat()
                 record.duration_ms = int((datetime.fromisoformat(record.finished_at) - datetime.fromisoformat(record.started_at)).total_seconds() * 1000)
                 record.result = result if isinstance(result, dict) else {"value": result}
                 record.logs = [log for log in context.logs if log.get("node_id") == node_id]
 
-                # 发送节点完成消息（携带结构化记录）
                 if context.websocket:
                     await context.websocket.send_json({
-                        "type": "node_complete",
+                        "type": WSMessageType.NODE_COMPLETE.value,
                         "node_id": node_id,
                         "success": True,
                         "result": result,
@@ -262,17 +259,15 @@ class WorkflowExecutor:
                 await context.send_screenshot()
 
             except Exception as e:
-                # 更新节点记录
-                record.status = "failed"
+                record.status = NodeStatus.FAILED.value
                 record.finished_at = datetime.now().isoformat()
                 record.duration_ms = int((datetime.fromisoformat(record.finished_at) - datetime.fromisoformat(record.started_at)).total_seconds() * 1000)
                 record.error = str(e)
                 record.logs = [log for log in context.logs if log.get("node_id") == node_id]
 
-                # 发送节点失败消息
                 if context.websocket:
                     await context.websocket.send_json({
-                        "type": "node_complete",
+                        "type": WSMessageType.NODE_COMPLETE.value,
                         "node_id": node_id,
                         "success": False,
                         "error": str(e),
@@ -284,10 +279,9 @@ class WorkflowExecutor:
         context.status = ExecutionStatus.COMPLETED
         context.end_time = datetime.now()
 
-        # 发送完成消息
         if context.websocket:
             await context.websocket.send_json({
-                "type": "execution_complete",
+                "type": WSMessageType.EXECUTION_COMPLETE.value,
                 "execution_id": context.execution_id,
                 "success": context.status == ExecutionStatus.COMPLETED,
                 "duration": (context.end_time - context.start_time).total_seconds() if context.end_time else 0,
@@ -309,8 +303,8 @@ class WorkflowExecutor:
                 "finished_at": context.end_time.isoformat() if context.end_time else None,
                 "duration_ms": int((context.end_time - context.start_time).total_seconds() * 1000) if context.start_time and context.end_time else None,
                 "total_nodes": len(workflow.get("nodes", [])),
-                "completed_nodes": sum(1 for r in context.node_records.values() if r.status == "completed"),
-                "failed_nodes": sum(1 for r in context.node_records.values() if r.status == "failed"),
+                "completed_nodes": sum(1 for r in context.node_records.values() if r.status == NodeStatus.COMPLETED.value),
+                "failed_nodes": sum(1 for r in context.node_records.values() if r.status == NodeStatus.FAILED.value),
                 "node_records": [r.to_dict() for r in context.node_records.values()],
             }
             await repo.save_execution(execution_log)
@@ -392,7 +386,7 @@ class WorkflowExecutor:
                 if context.websocket:
                     try:
                         await context.websocket.send_json({
-                            "type": "execution_cancelled",
+                            "type": WSMessageType.EXECUTION_CANCELLED.value,
                             "execution_id": execution_id
                         })
                     except Exception:
