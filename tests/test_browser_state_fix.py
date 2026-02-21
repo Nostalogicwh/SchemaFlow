@@ -1,16 +1,15 @@
 """测试浏览器登录状态保持修复。
 
 测试场景：
-1. 首次连接 CDP 浏览器
-2. 执行页面操作（模拟跳转后页面变化）
-3. 验证状态是否正确保持
-4. 清理时验证资源管理正确
+1. 当 page 被关闭后重新创建时，应该在现有 context 中创建（保持登录态）
+2. 当已连接时，复用现有状态
+3. 清理时根据状态正确执行
 """
 import asyncio
 import sys
 from pathlib import Path
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 
 # 添加项目根目录到路径
 project_root = Path(__file__).parent.parent
@@ -35,37 +34,45 @@ class MockContext:
 
 @pytest.mark.asyncio
 async def test_state_preserved_when_page_recreated():
-    """测试：当 page 被关闭后重新创建时，状态能正确保持。"""
-    print("\n=== 测试场景：page 关闭后重新创建，状态保持 ===")
+    """测试：当 page 被关闭后重新创建时，在现有 context 中创建（保持登录态）。"""
+    print("\n=== 测试场景：page 关闭后重新创建，在现有 context 中创建 ===")
 
     context = MockContext()
     browser_mgr = BrowserManager()
 
-    # 模拟首次连接成功（CDP 模式）
-    context.browser = MagicMock()
-    context.page = MagicMock()
+    # 模拟 CDP 模式已连接，但 page 被关闭了
+    mock_browser = MagicMock()
+    mock_browser_context = MagicMock()
+    mock_new_page = AsyncMock()
+    
+    mock_browser.contexts = [mock_browser_context]
+    mock_browser_context.new_page = mock_new_page
+    mock_browser.new_page = AsyncMock()  # 不应该被调用
+    
+    context.browser = mock_browser
+    context.page = None  # page 被关闭
     context._is_cdp = True
-    context._reused_page = False
-    browser_mgr._is_cdp = True
-    browser_mgr._reused_page = False
 
-    # 模拟 page 被关闭（如 close_tab_action）
-    context.page = None
+    # 创建 mock 页面
+    mock_page = MagicMock()
+    mock_new_page.return_value = mock_page
 
     # 再次调用 connect
-    with patch.object(context.browser, 'new_page', new_callable=AsyncMock) as mock_new_page:
-        mock_page = MagicMock()
-        mock_new_page.return_value = mock_page
+    is_cdp, reused = await browser_mgr.connect(context, headless=True)
 
-        is_cdp, reused = await browser_mgr.connect(context, headless=True)
+    # 验证：在现有 context 中创建新页面
+    assert mock_browser_context.new_page.called, "应该在现有 context 中创建新页面"
+    assert not mock_browser.new_page.called, "不应该调用 browser.new_page()（会创建新 context）"
+    
+    # 验证：状态应该保持为 CDP 模式
+    assert is_cdp == True, f"期望 is_cdp=True，实际为 {is_cdp}"
+    assert reused == False, f"期望 reused_page=False，实际为 {reused}"
+    assert context._is_cdp == True, "context._is_cdp 应该保持为 True"
+    assert context._reused_page == False, "context._reused_page 应该为 False"
+    assert context.page == mock_page
 
-        # 验证：状态应该保持为 CDP 模式
-        assert is_cdp == True, f"期望 is_cdp=True，实际为 {is_cdp}"
-        assert reused == False, f"期望 reused_page=False，实际为 {reused}"
-        assert browser_mgr._is_cdp == True, "BrowserManager._is_cdp 应该保持为 True"
-        assert browser_mgr._reused_page == False, "BrowserManager._reused_page 应该为 False"
-
-        print(f"✓ 状态正确保持: is_cdp={is_cdp}, reused_page={reused}")
+    print(f"✓ 状态正确保持: is_cdp={is_cdp}, reused_page={reused}")
+    print("✓ 在现有 context 中创建页面，登录态将被继承")
 
 
 @pytest.mark.asyncio
@@ -77,8 +84,11 @@ async def test_state_preserved_when_already_connected():
     browser_mgr = BrowserManager()
 
     # 模拟已连接状态
-    context.browser = MagicMock()
-    context.page = MagicMock()
+    mock_browser = MagicMock()
+    mock_page = MagicMock()
+    
+    context.browser = mock_browser
+    context.page = mock_page
     context._is_cdp = True
     context._reused_page = True
 
@@ -88,8 +98,9 @@ async def test_state_preserved_when_already_connected():
     # 验证：应该复用 context 中的状态
     assert is_cdp == True, f"期望 is_cdp=True，实际为 {is_cdp}"
     assert reused == True, f"期望 reused_page=True，实际为 {reused}"
-    assert browser_mgr._is_cdp == True
-    assert browser_mgr._reused_page == True
+    # 验证：状态存储在 context 中，而不是 browser_mgr 中
+    assert context._is_cdp == True
+    assert context._reused_page == True
 
     print(f"✓ 状态正确复用: is_cdp={is_cdp}, reused_page={reused}")
 
@@ -102,8 +113,8 @@ async def test_cleanup_respects_state():
     # 测试1: CDP 模式 + 复用页面 = 不关闭
     context = MockContext()
     browser_mgr = BrowserManager()
-    browser_mgr._is_cdp = True
-    browser_mgr._reused_page = True
+    context._is_cdp = True
+    context._reused_page = True
     context.page = MagicMock()
     context.page.is_closed.return_value = False
 
@@ -114,11 +125,12 @@ async def test_cleanup_respects_state():
 
     # 测试2: CDP 模式 + 新页面 = 关闭
     browser_mgr2 = BrowserManager()
-    browser_mgr2._is_cdp = True
-    browser_mgr2._reused_page = False
     context2 = MockContext()
+    context2._is_cdp = True
+    context2._reused_page = False
     context2.page = MagicMock()
     context2.page.is_closed.return_value = False
+    context2.page.close = AsyncMock()  # close 是异步方法
 
     await browser_mgr2.cleanup(context2)
 
@@ -127,10 +139,11 @@ async def test_cleanup_respects_state():
 
     # 测试3: 非 CDP 模式 = 停止 playwright
     browser_mgr3 = BrowserManager()
-    browser_mgr3._is_cdp = False
-    browser_mgr3._reused_page = False
-    browser_mgr3.playwright = MagicMock()
     context3 = MockContext()
+    context3._is_cdp = False
+    context3._reused_page = False
+    browser_mgr3.playwright = MagicMock()
+    browser_mgr3.playwright.stop = AsyncMock()  # stop 是异步方法
 
     await browser_mgr3.cleanup(context3)
 
@@ -147,7 +160,7 @@ async def test_first_connect_stores_state_to_context():
     # 实际的数据库/浏览器连接测试需要完整环境
     # 这里我们验证逻辑：connect 方法确实设置了 context._is_cdp 和 context._reused_page
 
-    print("✓ 代码审查验证：connect 方法在第 37-39、46-48、59-60、64-65、75-78、84-85、93-96 行正确设置了 context 状态")
+    print("✓ 代码审查验证：connect 方法正确设置了 context._is_cdp 和 context._reused_page")
     print("✓ 确保 _is_cdp 和 _reused_page 在每次连接后都同步到 context")
 
 
