@@ -214,7 +214,7 @@ async def custom_script_action(context: Any, config: Dict[str, Any]) -> Dict[str
 
     try:
         exec(script, {}, local_vars)
-    except Exception as e:
+    except (SyntaxError, NameError, TypeError, ValueError) as e:
         raise ValueError(f"脚本执行失败: {str(e)}")
 
     result = local_vars.get("result")

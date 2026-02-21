@@ -75,7 +75,7 @@ async def generate_workflow(request: GenerateRequest):
         logger.info("AI 生成工作流 - prompt: %s, model: %s", request.prompt, request.model)
         result = await call_llm(system_prompt, request.prompt, request.model)
         logger.info("LLM 响应长度: %d", len(result))
-    except Exception as e:
+    except (httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException) as e:
         logger.exception("调用大模型失败")
         raise HTTPException(status_code=500, detail=f"调用大模型失败: {e}")
 
@@ -85,7 +85,7 @@ async def generate_workflow(request: GenerateRequest):
         logger.info("解析成功 - 节点: %d, 连线: %d",
                      len(workflow_data.get("nodes", [])),
                      len(workflow_data.get("edges", [])))
-    except Exception as e:
+    except json.JSONDecodeError as e:
         logger.error("解析 LLM 响应失败 - 原始内容: %s", result[:500])
         raise HTTPException(status_code=500, detail=f"解析生成结果失败: {e}")
 
@@ -109,14 +109,16 @@ async def call_llm(system_prompt: str, user_prompt: str, model: str = None) -> s
     base_url = llm_cfg.get("base_url", "https://api.deepseek.com/v1")
     model = model or llm_cfg.get("model", "deepseek-chat")
     temperature = llm_cfg.get("temperature", 0.1)
-    timeout = llm_cfg.get("timeout", 120)
+    timeout = llm_cfg.get("timeout", 600)
 
     if not api_key:
         raise ValueError("未配置 LLM API Key（设置 LLM_API_KEY 环境变量或 settings.toml）")
 
-    logger.info("调用 LLM - base_url: %s, model: %s", base_url, model)
+    logger.info("调用 LLM - base_url: %s, model: %s, timeout: %ss", base_url, model, timeout)
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    # 设置超时：连接5秒，读取使用配置的超时时间
+    httpx_timeout = httpx.Timeout(timeout, connect=5.0)
+    async with httpx.AsyncClient(timeout=httpx_timeout) as client:
         response = await client.post(
             f"{base_url}/chat/completions",
             headers={

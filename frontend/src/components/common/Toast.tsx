@@ -32,7 +32,8 @@ export function Toast() {
           <span className="flex-1 text-sm">{toast.message}</span>
           <button
             onClick={() => removeToast(toast.id)}
-            className="opacity-70 hover:opacity-100 text-sm"
+            className="opacity-70 hover:opacity-100 text-sm focus:outline-none focus:ring-2 focus:ring-white/50 rounded"
+            aria-label="关闭通知"
           >
             ✕
           </button>

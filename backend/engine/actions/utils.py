@@ -5,27 +5,86 @@ from typing import Dict, Any, Optional
 from ..ai_locator import locate_with_ai
 
 
-async def locate_element(page, selector: Optional[str] = None, ai_target: Optional[str] = None, context=None):
-    """定位页面元素，支持CSS选择器或AI定位。
+async def locate_element(
+    page, 
+    selector: Optional[str] = None, 
+    ai_target: Optional[str] = None, 
+    context=None,
+    wait_for_visible: bool = True,
+    timeout: int = 30000
+):
+    """定位页面元素，支持CSS选择器或AI定位（增强版）。
 
     Args:
         page: Playwright页面对象
         selector: CSS选择器（可选）
         ai_target: AI定位描述（可选）
         context: 执行上下文，用于AI定位
+        wait_for_visible: 是否等待元素可见
+        timeout: 超时时间（毫秒）
 
     Returns:
         Playwright Locator对象
+
+    Raises:
+        ValueError: 无法定位元素时
     """
+    locator = None
+    used_selector = selector
+    
+    # 1. 如果提供了AI目标，使用AI定位
     if ai_target and not selector:
         if not context:
             raise ValueError("AI定位需要提供context")
-        selector = await locate_with_ai(page, ai_target, context)
-
-    if not selector:
+        try:
+            used_selector = await locate_with_ai(
+                page, 
+                ai_target, 
+                context,
+                timeout=timeout,
+                enable_fallback=True
+            )
+        except ValueError as e:
+            # 如果AI定位失败，尝试直接回退策略
+            from ..ai_locator import try_fallback_strategies
+            fallback_selector, fallback_locator = await try_fallback_strategies(page, ai_target, context)
+            if fallback_selector and fallback_locator:
+                await context.log("info", f"AI定位失败，使用回退策略: {fallback_selector}")
+                used_selector = fallback_selector
+                locator = fallback_locator
+            else:
+                raise e
+    
+    if not used_selector:
         raise ValueError("必须提供 selector 或 ai_target 参数")
-
-    return page.locator(selector)
+    
+    # 2. 创建locator（如果还没有）
+    if locator is None:
+        locator = page.locator(used_selector)
+    
+    # 3. 等待元素出现和可见
+    if wait_for_visible:
+        try:
+            await locator.wait_for(state="visible", timeout=timeout)
+            
+            # 额外检查元素是否真的存在
+            count = await locator.count()
+            if count == 0:
+                raise ValueError(f"选择器未匹配到任何元素: {used_selector}")
+            
+            if context:
+                await context.log("debug", f"元素定位成功: {used_selector} (匹配 {count} 个)")
+                
+        except TimeoutError:
+            if context:
+                await context.log("error", f"等待元素超时: {used_selector}")
+            raise ValueError(f"等待元素超时 ({timeout}ms): {used_selector}")
+        except (TimeoutError, ValueError) as e:
+            if context:
+                await context.log("error", f"元素定位失败: {used_selector}, 错误: {str(e)}")
+            raise ValueError(f"元素定位失败: {used_selector}, 错误: {str(e)}")
+    
+    return locator
 
 
 async def _locate_by_ai_target(page, ai_target: str, context=None):

@@ -1,10 +1,22 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { useExecutionStore } from '@/stores/executionStore'
 import { toast } from '@/stores/uiStore'
+import { Button } from '@/components/ui/Button'
+import { Input } from '@/components/ui/Input'
 import type { Workflow } from '@/types/workflow'
+import { 
+  Play, 
+  Square, 
+  RefreshCw, 
+  PanelRight, 
+  Menu,
+  Workflow as WorkflowIcon,
+  Info
+} from 'lucide-react'
 
 type ExecutionStatus = 'idle' | 'running' | 'success' | 'error'
+type ExecutionMode = 'headless' | 'headed'
 
 interface HeaderProps {
   onExecute: () => void
@@ -16,51 +28,9 @@ interface HeaderProps {
 }
 
 const SchemaFlowLogo = () => (
-  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M4 6h16M4 12h16M4 18h10" strokeLinecap="round" />
-    <circle cx="19" cy="18" r="2" fill="currentColor" stroke="none" />
-  </svg>
-)
-
-const PlayIcon = () => (
-  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M8 5v14l11-7z" />
-  </svg>
-)
-
-const StopIcon = () => (
-  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-    <rect x="6" y="6" width="12" height="12" rx="1" />
-  </svg>
-)
-
-const SpinnerIcon = () => (
-  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-    <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
-  </svg>
-)
-
-const CheckIcon = () => (
-  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-    <path d="M5 12l5 5L20 7" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-)
-
-const RefreshIcon = () => (
-  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M21 3v5h-5" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M3 21v-5h5" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-)
-
-const PanelIcon = ({ isOpen }: { isOpen: boolean }) => (
-  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <path d={isOpen ? "M15 3v18" : "M9 3v18"} />
-  </svg>
+  <div className="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-lg">
+    <WorkflowIcon className="w-5 h-5 text-white" />
+  </div>
 )
 
 function EditableWorkflowName({ workflow }: { workflow: Workflow }) {
@@ -108,15 +78,18 @@ function EditableWorkflowName({ workflow }: { workflow: Workflow }) {
 
   if (isEditing) {
     return (
-      <input
-        ref={inputRef}
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onBlur={handleSave}
-        onKeyDown={handleKeyDown}
-        className="px-2 py-0.5 text-sm font-medium bg-white border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-200 min-w-[120px] max-w-[240px]"
-      />
+      <div className="w-40">
+        <Input
+          ref={inputRef}
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          size="sm"
+          autoFocus
+        />
+      </div>
     )
   }
 
@@ -140,50 +113,50 @@ function ExecuteButton({
   onExecute: () => void
   onStop: () => void
 }) {
-  const baseClasses =
-    'flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded transition-all duration-200'
-
   switch (status) {
     case 'running':
       return (
-        <button
+        <Button
           onClick={onStop}
-          className={`${baseClasses} bg-amber-500 hover:bg-amber-600 text-white shadow-sm`}
+          variant="secondary"
+          size="sm"
+          icon={<Square className="w-4 h-4" />}
         >
-          <SpinnerIcon />
-          <span>执行中...</span>
-          <StopIcon />
-        </button>
+          停止
+        </Button>
       )
     case 'success':
       return (
-        <button
+        <Button
           onClick={onExecute}
-          className={`${baseClasses} bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm`}
+          variant="primary"
+          size="sm"
+          icon={<Play className="w-4 h-4" />}
         >
-          <CheckIcon />
-          <span>完成</span>
-        </button>
+          再次运行
+        </Button>
       )
     case 'error':
       return (
-        <button
+        <Button
           onClick={onExecute}
-          className={`${baseClasses} bg-red-500 hover:bg-red-600 text-white shadow-sm`}
+          variant="danger"
+          size="sm"
+          icon={<RefreshCw className="w-4 h-4" />}
         >
-          <RefreshIcon />
-          <span>失败 - 重试</span>
-        </button>
+          重试
+        </Button>
       )
     default:
       return (
-        <button
+        <Button
           onClick={onExecute}
-          className={`${baseClasses} bg-blue-500 hover:bg-blue-600 text-white shadow-sm`}
+          variant="primary"
+          size="sm"
+          icon={<Play className="w-4 h-4" />}
         >
-          <PlayIcon />
-          <span>运行</span>
-        </button>
+          运行
+        </Button>
       )
   }
 }
@@ -198,44 +171,93 @@ export function Header({
 }: HeaderProps) {
   const { currentWorkflow } = useWorkflowStore()
   const { executionState, executionMode, setExecutionMode } = useExecutionStore()
+  const lastExecutionIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (executionState.executionId) {
+      lastExecutionIdRef.current = executionState.executionId
+    }
+  }, [executionState.executionId])
 
   const hasFailedNodes = Object.values(executionState.nodeStatuses).some((s) => s === 'failed')
   const hasCompletedNodes = Object.values(executionState.nodeStatuses).some((s) => s === 'completed')
+  // eslint-disable-next-line react-hooks/refs
+  const isCurrentExecution = executionState.executionId !== null && executionState.executionId === lastExecutionIdRef.current
 
   let executionStatus: ExecutionStatus = 'idle'
   if (executionState.isRunning) {
     executionStatus = 'running'
-  } else if (hasFailedNodes) {
+  } else if (isCurrentExecution && hasFailedNodes) {
     executionStatus = 'error'
-  } else if (hasCompletedNodes) {
+  } else if (isCurrentExecution && hasCompletedNodes) {
     executionStatus = 'success'
   }
 
+function ExecutionModeToggle({ 
+  mode, 
+  onChange 
+}: { 
+  mode: ExecutionMode
+  onChange: (mode: ExecutionMode) => void 
+}) {
   return (
-    <header className="h-12 bg-gradient-to-r from-slate-800 to-slate-700 flex items-center justify-between px-2 md:px-4 shrink-0 shadow-sm">
-      <div className="flex items-center gap-2 md:gap-4">
+    <div className="flex items-center gap-1">
+      <div className="flex items-center bg-neutral-100 rounded-md p-0.5 border border-neutral-200">
+        <button
+          onClick={() => onChange('headless')}
+          className={`px-2.5 py-1 text-xs font-medium rounded transition-all ${
+            mode === 'headless'
+              ? 'bg-white text-neutral-900 shadow-sm'
+              : 'text-neutral-500 hover:text-neutral-700'
+          }`}
+        >
+          后台
+        </button>
+        <button
+          onClick={() => onChange('headed')}
+          className={`px-2.5 py-1 text-xs font-medium rounded transition-all ${
+            mode === 'headed'
+              ? 'bg-white text-neutral-900 shadow-sm'
+              : 'text-neutral-500 hover:text-neutral-700'
+          }`}
+        >
+          前台
+        </button>
+      </div>
+      <div className="relative group">
+        <Info className="w-3.5 h-3.5 text-neutral-400 cursor-help" />
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1.5 bg-neutral-800 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+          <div className="mb-1"><span className="font-medium">后台模式：</span>无界面运行</div>
+          <div><span className="font-medium">前台模式：</span>显示浏览器窗口</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+  return (
+    <header className="h-14 bg-white border-b border-neutral-200 flex items-center justify-between px-3 md:px-4 shrink-0">
+      <div className="flex items-center gap-3 md:gap-4">
         {onToggleSidebar && (
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
+            iconOnly
             onClick={onToggleSidebar}
-            className="p-1.5 hover:bg-slate-700 rounded md:hidden text-white"
+            className="md:hidden"
             title={sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+            aria-label={sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {sidebarCollapsed ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              )}
-            </svg>
-          </button>
+            <Menu className="w-5 h-5" />
+          </Button>
         )}
-        <div className="flex items-center gap-2 text-white">
+        <div className="flex items-center gap-2.5">
           <SchemaFlowLogo />
-          <span className="font-semibold tracking-tight text-sm md:text-base">SchemaFlow</span>
+          <span className="font-semibold text-neutral-900 tracking-tight text-sm md:text-base">SchemaFlow</span>
         </div>
 
         {currentWorkflow && (
-          <div className="hidden sm:flex items-center gap-2 pl-4 border-l border-slate-600">
+          <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-neutral-200">
             <EditableWorkflowName workflow={currentWorkflow} />
           </div>
         )}
@@ -244,28 +266,21 @@ export function Header({
       <div className="flex items-center gap-2 md:gap-3">
         {currentWorkflow && (
           <>
-            <select
-              value={executionMode}
-              onChange={(e) => setExecutionMode(e.target.value as 'headless' | 'headed')}
-              className="px-2 py-1 text-xs md:text-sm bg-slate-100 border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              <option value="headless">后台</option>
-              <option value="headed">前台</option>
-            </select>
+            <ExecutionModeToggle 
+              mode={executionMode} 
+              onChange={setExecutionMode} 
+            />
 
             <ExecuteButton status={executionStatus} onExecute={onExecute} onStop={onStop} />
 
-            <button
+            <Button
+              variant={showPanel ? 'secondary' : 'ghost'}
+              size="sm"
+              icon={<PanelRight className="w-4 h-4" />}
               onClick={onTogglePanel}
-              className={`flex items-center gap-1 px-2 md:px-3 py-1.5 text-xs md:text-sm rounded transition-all ${
-                showPanel
-                  ? 'bg-slate-200 text-slate-800'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
             >
-              <PanelIcon isOpen={showPanel} />
               <span className="hidden md:inline">{showPanel ? '隐藏' : '监控'}</span>
-            </button>
+            </Button>
           </>
         )}
       </div>

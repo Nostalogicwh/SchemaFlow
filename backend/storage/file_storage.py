@@ -56,7 +56,7 @@ class JSONFileStorage(StorageBase):
             async with aiofiles.open(tmp_path, 'w', encoding='utf-8') as f:
                 await f.write(json.dumps(index, indent=2, ensure_ascii=False))
             os.replace(tmp_path, str(self.index_file))
-        except Exception:
+        except (OSError, IOError) as e:
             os.unlink(tmp_path)
             raise
         finally:

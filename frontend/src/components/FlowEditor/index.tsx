@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { toast } from '@/stores/uiStore'
 import {
   ReactFlow,
   Background,
@@ -45,7 +46,7 @@ function workflowToFlow(workflow: Workflow): { nodes: FlowNode[]; edges: Edge[] 
     type: node.type,
     position: node.position ?? { x: 100 + index * 200, y: 100 + (index % 2) * 100 },
     data: {
-      label: node.type,
+      label: node.label || node.type,
       category: nodeCategoryMap[node.type] || 'base',
       config: node.config,
       status: 'idle' as NodeStatus,
@@ -70,6 +71,7 @@ function flowToWorkflow(
   const workflowNodes: WorkflowNode[] = nodes.map((node) => ({
     id: node.id,
     type: node.type!,
+    label: node.data.label,
     config: node.data.config || {},
     position: { x: node.position.x, y: node.position.y },
   }))
@@ -100,8 +102,8 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
   const [edges, setEdges, onEdgesState] = useEdgesState<Edge>([])
   const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null)
   const [actions, setActions] = useState<ActionMetadata[]>([])
-  const [showPanel, setShowPanel] = useState(true)
-  const [showMiniMap, setShowMiniMap] = useState(true)
+  const [showPanel] = useState(true)
+  const [showMiniMap] = useState(true)
   const { screenToFlowPosition } = useReactFlow()
 
   const storeNodeStatuses = useExecutionStore((state) => state.executionState.nodeStatuses)
@@ -162,6 +164,24 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
       setSelectedNode((prev) =>
         prev?.id === nodeId
           ? { ...prev, data: { ...prev.data, config } }
+          : prev
+      )
+    },
+    [setNodes]
+  )
+
+  const handleUpdateNodeLabel = useCallback(
+    (nodeId: string, label: string) => {
+      setNodes((nds) =>
+        nds.map((node) =>
+          node.id === nodeId
+            ? { ...node, data: { ...node.data, label } }
+            : node
+        )
+      )
+      setSelectedNode((prev) =>
+        prev?.id === nodeId
+          ? { ...prev, data: { ...prev.data, label } }
           : prev
       )
     },
@@ -229,8 +249,9 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
         target: e.target,
       }))
 
-      setNodes((nds) => [...nds, ...newNodes])
-      setEdges((eds) => [...eds, ...newEdges])
+      // 清除原工作流，添加新节点
+      setNodes(newNodes)
+      setEdges(newEdges)
     },
     [setNodes, setEdges]
   )
@@ -239,12 +260,13 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
     if (!workflow || !onSave) return
     const updatedWorkflow = flowToWorkflow(nodes, edges, workflow)
     onSave(updatedWorkflow)
+    toast.success('工作流已保存')
   }, [workflow, nodes, edges, onSave])
 
   return (
     <div className="flex h-full relative">
       <div className="border-r bg-white shrink-0 w-48">
-        <Toolbar actions={actions} onAIGenerate={handleAIGenerate} />
+        <Toolbar actions={actions} hasNodes={nodes.length > 0} onAIGenerate={handleAIGenerate} />
       </div>
 
       <div className="flex-1 h-full min-w-0" style={{ minHeight: '400px' }}>
@@ -291,6 +313,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
               selectedNode={selectedNode}
               actionMetadata={actions}
               onUpdateNode={handleUpdateNode}
+              onUpdateNodeLabel={handleUpdateNodeLabel}
             />
           </>
         )}

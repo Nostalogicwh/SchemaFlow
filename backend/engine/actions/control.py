@@ -1,6 +1,7 @@
 """控制节点 - 等待、用户输入等。"""
 from typing import Dict, Any
 from ..actions import register_action
+from .utils import locate_element
 
 
 @register_action(
@@ -52,13 +53,17 @@ async def wait_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "string",
                 "description": "CSS 选择器"
             },
+            "ai_target": {
+                "type": "string",
+                "description": "AI 定位目标描述（当 selector 不存在时使用）"
+            },
             "timeout": {
                 "type": "number",
                 "description": "超时时间（秒）",
                 "default": 30
             }
         },
-        "required": ["selector"]
+        "required": []
     },
     inputs=["flow"],
     outputs=["flow"]
@@ -68,16 +73,36 @@ async def wait_for_element_action(context: Any, config: Dict[str, Any]) -> Dict[
 
     Args:
         context: 执行上下文
-        config: 节点配置，包含 selector 和 timeout
+        config: 节点配置，包含 selector、ai_target 和 timeout
 
     Returns:
         执行结果
     """
     selector = config.get("selector")
+    ai_target = config.get("ai_target")
     timeout = config.get("timeout", 30)
 
-    await context.log("info", f"等待元素: {selector} (超时: {timeout}s)")
-    await context.page.wait_for_selector(selector, timeout=timeout * 1000)
+    if not selector and not ai_target:
+        raise ValueError("wait_for_element 节点需要提供 selector 或 ai_target 参数")
+
+    target_desc = selector or ai_target
+    await context.log("info", f"等待元素: {target_desc} (超时: {timeout}s)")
+
+    try:
+        # 使用 locate_element 来定位元素（支持 AI 定位）
+        await locate_element(
+            context.page,
+            selector,
+            ai_target,
+            context,
+            wait_for_visible=True,
+            timeout=timeout * 1000
+        )
+        await context.log("info", f"元素已出现: {target_desc}")
+    except ValueError as e:
+        await context.log("error", f"等待元素失败: {target_desc}, 错误: {str(e)}")
+        raise
+
     return {}
 
 

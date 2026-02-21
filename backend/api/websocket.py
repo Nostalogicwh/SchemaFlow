@@ -1,6 +1,7 @@
 """WebSocket 连接管理器。"""
 from typing import Dict
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
+from websockets.exceptions import ConnectionClosed
 
 
 class ConnectionManager:
@@ -51,7 +52,9 @@ class ConnectionManager:
         if execution_id in self.exec_connections:
             try:
                 await self.exec_connections[execution_id].send_json(message)
-            except Exception:
+            except ConnectionClosed:
+                self.disconnect(execution_id)
+            except WebSocketDisconnect:
                 self.disconnect(execution_id)
 
     async def broadcast(self, message: Dict):
@@ -63,7 +66,9 @@ class ConnectionManager:
         for execution_id, websocket in list(self.exec_connections.items()):
             try:
                 await websocket.send_json(message)
-            except Exception:
+            except ConnectionClosed:
+                self.disconnect(execution_id)
+            except WebSocketDisconnect:
                 self.disconnect(execution_id)
 
     def get_status(self, execution_id: str):

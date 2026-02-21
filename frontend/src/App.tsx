@@ -1,9 +1,10 @@
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState } from 'react'
 import { FlowEditor } from '@/components/FlowEditor'
 import { WorkflowList } from '@/components/WorkflowList'
 import { ExecutionPanel } from '@/components/ExecutionPanel'
 import { Header } from '@/components/Header'
 import { Toast, ErrorBoundary, ConfirmDialog, EmptyState } from '@/components/common'
+import { Rocket } from 'lucide-react'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { useExecutionStore } from '@/stores/executionStore'
 import { toast } from '@/stores/uiStore'
@@ -123,7 +124,7 @@ function App() {
             </ErrorBoundary>
           ) : (
             <EmptyState
-              icon="🚀"
+              icon={Rocket}
               title="开始使用 SchemaFlow"
               description="选择一个现有工作流或创建新的工作流"
               action={{ label: '创建工作流', onClick: handleCreateWorkflow }}

@@ -1,5 +1,6 @@
 """执行上下文 - 管理单个工作流执行周期的状态。"""
 import asyncio
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -7,13 +8,28 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 import base64
 
+from fastapi import WebSocketDisconnect
+from websockets.exceptions import ConnectionClosed
+from openai import AuthenticationError, APIError, OpenAIError, AsyncOpenAI
+
 from .constants import NodeStatus, WSMessageType
+
+logger = logging.getLogger(__name__)
+
+
+# LLM客户端单例
+_llm_client_instance = None
 
 
 def create_llm_client():
-    """创建 OpenAI 客户端实例。"""
+    """创建 OpenAI 异步客户端实例（单例模式）。"""
+    global _llm_client_instance
+
+    if _llm_client_instance is not None:
+        return _llm_client_instance
+
     try:
-        from openai import OpenAI
+        from openai import AsyncOpenAI
         from config import get_settings
 
         llm_cfg = get_settings().get("llm", {})
@@ -23,10 +39,11 @@ def create_llm_client():
         if not api_key:
             return None
 
-        return OpenAI(api_key=api_key, base_url=base_url)
+        _llm_client_instance = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        return _llm_client_instance
     except ImportError:
         return None
-    except Exception:
+    except (AuthenticationError, APIError, OpenAIError):
         return None
 
 
@@ -137,7 +154,7 @@ class ExecutionContext:
         try:
             from config import get_settings
             llm_cfg = get_settings().get("llm", {})
-        except Exception:
+        except (ImportError, KeyError):
             pass
         self.llm_model = llm_cfg.get("model", "deepseek-chat") if llm_cfg else "deepseek-chat"
 
@@ -153,6 +170,10 @@ class ExecutionContext:
                     "data": base64_data,
                     "timestamp": datetime.now().isoformat()
                 })
+            except (ConnectionClosed, WebSocketDisconnect) as e:
+                await self.log("debug", f"WebSocket断开，无法发送截图: {e}")
+            except TimeoutError as e:
+                await self.log("error", f"截图超时: {e}")
             except Exception as e:
                 await self.log("error", f"发送截图失败: {e}")
 
@@ -209,13 +230,22 @@ class ExecutionContext:
         }
         self.logs.append(log_entry)
 
+        # 本地日志记录
+        log_msg = f"[{self.execution_id}] {message}"
+        if level == "error":
+            logger.error(log_msg)
+        elif level == "warning":
+            logger.warning(log_msg)
+        else:
+            logger.info(log_msg)
+
         if self.websocket:
             try:
                 await self.websocket.send_json({
                     "type": WSMessageType.LOG.value,
                     **log_entry
                 })
-            except Exception:
+            except (ConnectionClosed, WebSocketDisconnect):
                 pass
 
     def record_action(self, action_type: str, details: Dict[str, Any]):
