@@ -507,28 +507,200 @@ const { executionState } = useExecutionStore()
 
 ## C. 功能补全
 
-### C1. Browser Use 集成（或等效 AI 自动化能力）
+### C1. AI 智能元素定位（重构 ai_target）
 
 #### 现状
 
-设计文档中的 `ai_action` 节点已移除。`ai_target` 使用 Playwright 语义定位器实现了基础功能，但缺少真正的 AI 驱动浏览器自动化能力。
+当前 `ai_target` 实现只是简单的关键词匹配：
 
-#### 方案选择
+```python
+# browser.py:18-26
+strategies = [
+    ("get_by_role('button')", lambda: page.get_by_role("button", name=ai_target)),
+    ("get_by_text", lambda: page.get_by_text(ai_target, exact=False)),
+    ("get_by_placeholder", lambda: page.get_by_placeholder(ai_target)),
+    ...
+]
+```
 
-| 方案 | 说明 | 优劣 |
-|------|------|------|
-| A. 集成 browser-use | 使用 browser-use 库 | 功能强大，但依赖不稳定（PyPI 版本问题） |
-| B. 集成 Playwright MCP | 用 MCP 协议调 Playwright | 生态新，文档少 |
-| C. 自研 LLM+Playwright | LLM 分析截图/DOM → 生成 Playwright 操作 | 可控性强，工作量大 |
+**问题**：
+1. 纯文本匹配，无法理解用户真实意图
+2. 页面有多个相似元素时无法区分
+3. 复杂 UI 场景（如表格内按钮、动态内容）无法处理
+4. 失败时没有有用的错误提示
+5. 用户不知道为什么匹配失败，也不知道如何改进描述
 
-**推荐方案 C**：自研轻量方案，LLM 接收页面截图 + 简化 DOM 结构，返回操作指令。与现有架构无缝集成。
+#### 目标
+
+设计一个真正利用 LLM 能力的智能元素定位系统：
+
+1. **理解用户意图**：不只是匹配文字，而是理解"登录按钮"、"提交表单的按钮"等语义
+2. **分析页面上下文**：获取页面 DOM 结构，让 LLM 分析哪个元素最符合用户描述
+3. **提供置信度和候选**：返回多个候选选择器及其置信度，而非单一结果
+4. **可解释性**：失败时说明原因，帮助用户改进
 
 #### 涉及文件
 
 | 文件 | 改动 |
 |------|------|
-| `backend/engine/actions/ai.py`（新建） | 恢复 `ai_action` 节点 |
-| `backend/engine/ai_driver.py`（新建） | LLM 驱动的浏览器操作引擎 |
+| `backend/engine/ai_locator.py`（新建） | AI 元素定位核心逻辑 |
+| `backend/engine/actions/browser.py` | click、input_text 的 ai_target 改为调用 AI 定位 |
+| `backend/engine/actions/utils.py`（新建） | 公共 `locate_element()` 函数 |
+
+#### 核心流程
+
+```
+用户描述: "登录按钮"
+     ↓
+1. 获取页面 DOM 快照
+   - 提取所有可交互元素（button, a, input, select, [onclick] 等）
+   - 简化 DOM：只保留 tag、id、class、text、aria-*、name、type 等关键属性
+   - 限制元素数量（最多 100 个），超出时优先保留可见元素
+     ↓
+2. 构建 LLM Prompt
+   System: "你是网页元素定位专家。根据用户描述和页面 DOM，找出最匹配的元素选择器。"
+   User: 
+     - 页面 URL: {url}
+     - 用户描述: {ai_target}
+     - 可交互元素列表:
+       [0] <button id="submit-btn" class="primary">登录</button>
+       [1] <a href="/login" class="nav-link">登录</a>
+       [2] <input type="submit" value="登录" />
+       ...
+     ↓
+3. LLM 返回结构化结果
+   {
+     "best_match_index": 0,
+     "selector": "#submit-btn",
+     "confidence": 0.95,
+     "reasoning": "这是一个 id 为 submit-btn 的按钮，文本为「登录」，最符合用户描述",
+     "alternatives": [
+       {"index": 2, "selector": "input[type='submit']", "confidence": 0.7}
+     ]
+   }
+     ↓
+4. 执行和验证
+   - 使用返回的 selector 定位元素
+   - 验证元素是否可见、可交互
+   - 如果失败，尝试 alternatives
+   - 记录日志（包含 reasoning，帮助调试）
+     ↓
+5. 错误处理
+   - 所有候选都失败时，返回详细错误：
+     "AI 定位失败：「登录按钮」
+      - 分析了 45 个可交互元素
+      - 最接近的候选: #submit-btn (置信度 0.95)
+      - 失败原因: 元素被遮挡
+      建议: 尝试滚动页面或使用更具体的描述"
+```
+
+#### DOM 简化策略
+
+```python
+async def extract_interactive_elements(page) -> List[dict]:
+    """提取页面可交互元素，生成简化的 DOM 表示。"""
+    return await page.evaluate("""
+        () => {
+            const interactiveSelectors = [
+                'button', 'a', 'input', 'select', 'textarea',
+                '[onclick]', '[role="button"]', '[role="link"]',
+                '[tabindex]:not([tabindex="-1"])'
+            ];
+            const elements = document.querySelectorAll(interactiveSelectors.join(','));
+            
+            // 过滤不可见元素，限制数量
+            const visible = Array.from(elements)
+                .filter(el => {
+                    const rect = el.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0;
+                })
+                .slice(0, 100);
+            
+            return visible.map((el, idx) => ({
+                index: idx,
+                tag: el.tagName.toLowerCase(),
+                id: el.id || null,
+                className: el.className || null,
+                type: el.type || null,
+                text: el.innerText?.trim().slice(0, 100) || null,
+                ariaLabel: el.getAttribute('aria-label'),
+                placeholder: el.placeholder || null,
+                name: el.name || null,
+                href: el.href || null,
+            }));
+        }
+    """)
+```
+
+#### Prompt 设计
+
+```
+System:
+你是网页元素定位专家。根据用户描述和页面 DOM，找出最匹配的元素选择器。
+
+规则：
+1. 返回 JSON 格式
+2. 必须包含 best_match_index、selector、confidence、reasoning
+3. confidence 范围 0-1，低于 0.5 表示不确定
+4. 如果没有合适匹配，设置 best_match_index 为 -1 并说明原因
+
+User:
+页面 URL: https://example.com/login
+用户想要: {ai_target}
+
+可交互元素：
+[0] button#submit-btn.primary "登录"
+[1] a.nav-link "登录"
+[2] input[type="text"] placeholder="用户名"
+[3] input[type="password"] placeholder="密码"
+[4] button "注册"
+...
+
+请分析并返回最匹配的元素。
+```
+
+#### 降级策略
+
+当 LLM 调用失败或超时时：
+1. 回退到当前的关键词匹配逻辑
+2. 在日志中标记为"降级模式"
+3. 提示用户 LLM 不可用，建议使用 CSS 选择器
+
+#### 性能优化
+
+1. **DOM 缓存**：同一页面多次定位时复用 DOM 快照
+2. **并发限制**：全局限制 LLM 并发调用数（避免 token 爆炸）
+3. **超时控制**：单次定位超时 10 秒，超时后降级
+
+---
+
+### C2. Browser Use 集成（AI 自动化节点）
+
+#### 现状
+
+设计文档中的 `ai_action` 节点已移除。需要补全真正的 AI 驱动浏览器自动化能力。
+
+#### 与 C1 的关系
+
+- **C1 (AI 元素定位)**：在现有节点（click、input_text）中增强 ai_target 能力
+- **C2 (AI 自动化节点)**：新增独立的 `ai_action` 节点，由 LLM 完全驱动浏览器操作
+
+#### 方案选择
+
+| 方案 | 说明 | 优劣 |
+|------|------|------|
+| A. 集成 browser-use | 使用 browser-use 库 | 功能强大，但依赖不稳定 |
+| B. 集成 Playwright MCP | 用 MCP 协议调 Playwright | 生态新，文档少 |
+| C. 自研 LLM+Playwright | 复用 C1 的 AI 定位能力 | 可控性强，架构统一 |
+
+**推荐方案 C**：自研轻量方案，与 C1 共享 `ai_locator.py` 的能力。
+
+#### 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `backend/engine/actions/ai.py`（新建） | `ai_action` 节点 |
+| `backend/engine/ai_locator.py`（新建） | 与 C1 共享 |
 | `frontend/src/components/FlowEditor/nodes/AINode.tsx`（新建） | AI 节点前端组件 |
 
 #### 核心流程
@@ -536,16 +708,16 @@ const { executionState } = useExecutionStore()
 ```
 ai_action 节点执行：
 1. 截取当前页面截图
-2. 提取页面简化 DOM（可交互元素列表）
+2. 提取页面简化 DOM（复用 C1 逻辑）
 3. 发送给 LLM："根据截图和 DOM，执行用户指令: {prompt}"
 4. LLM 返回操作序列：[{"action": "click", "selector": "..."}, ...]
 5. 逐步执行操作，每步后截图反馈
-6. 循环直到任务完成或达到最大步数
+6. 循环直到任务完成或达到最大步数（默认 10 步）
 ```
 
 ---
 
-### C2. 操作录制功能
+### C3. 操作录制功能
 
 #### 现状
 
@@ -581,7 +753,7 @@ ai_action 节点执行：
 
 ---
 
-### C3. 补全缺失节点类型
+### C4. 补全缺失节点类型
 
 #### 现状
 
@@ -742,11 +914,12 @@ async def switch_tab_action(context, config):
 | **P7** | B3 错误处理体系 | P5 |
 | **P8** | B4 公共样式常量 | 无 |
 | **P9** | D1-D7 样式优化 | P5, P7, P8（需要新组件体系就绪） |
-| **P10** | C3 补全缺失节点 | P0, P2 |
-| **P11** | C1 Browser Use 集成 | P1, P2 |
-| **P12** | C2 操作录制 | P1, P5 |
+| **P10** | C1 AI 智能元素定位 | P0, P2 |
+| **P11** | C2 Browser Use 集成 | P1, P2, C1 |
+| **P12** | C3 操作录制 | P1, P5 |
+| **P13** | C4 补全缺失节点 | P0, P2 |
 
-后端重构（P0-P4）和前端重构（P5-P8）可并行推进。样式优化（P9）在前端重构完成后进行。功能补全（P10-P12）在架构稳定后进行。
+后端重构（P0-P4）和前端重构（P5-P8）可并行推进。样式优化（P9）在前端重构完成后进行。功能补全（P10-P13）在架构稳定后进行。
 
 ---
 
