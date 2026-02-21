@@ -1,5 +1,5 @@
 """动作注册表 - 管理所有工作流节点。"""
-from typing import Dict, Callable, Any, List
+from typing import Dict, Callable, Any, List, Optional
 from pydantic import BaseModel
 
 
@@ -37,7 +37,7 @@ class ActionRegistry:
             "execute": execute_func
         }
 
-    def get(self, name: str) -> Dict[str, Any] | None:
+    def get(self, name: str) -> Optional[Dict[str, Any]]:
         """获取动作定义。
 
         Args:
