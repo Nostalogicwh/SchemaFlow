@@ -9,7 +9,7 @@ import base64
 
 from fastapi import WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
-from openai import ConfigurationError, AuthenticationError, APIError
+from openai import AuthenticationError, APIError, OpenAIError
 
 from .constants import NodeStatus, WSMessageType
 
@@ -40,7 +40,7 @@ def create_llm_client():
         return _llm_client_instance
     except ImportError:
         return None
-    except (ConfigurationError, AuthenticationError, APIError):
+    except (AuthenticationError, APIError, OpenAIError):
         return None
 
 

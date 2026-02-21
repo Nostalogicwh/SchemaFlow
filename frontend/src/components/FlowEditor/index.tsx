@@ -100,8 +100,8 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
   const [edges, setEdges, onEdgesState] = useEdgesState<Edge>([])
   const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null)
   const [actions, setActions] = useState<ActionMetadata[]>([])
-  const [showPanel, setShowPanel] = useState(true)
-  const [showMiniMap, setShowMiniMap] = useState(true)
+  const [showPanel] = useState(true)
+  const [showMiniMap] = useState(true)
   const { screenToFlowPosition } = useReactFlow()
 
   const storeNodeStatuses = useExecutionStore((state) => state.executionState.nodeStatuses)

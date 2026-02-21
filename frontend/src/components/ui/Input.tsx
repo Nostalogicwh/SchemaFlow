@@ -12,9 +12,11 @@ import { forwardRef, useState } from 'react'
 import { cn } from '@/utils'
 import { X, type LucideIcon } from 'lucide-react'
 
-export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> {
+export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'size'> {
   /** 输入框类型 */
   type?: 'text' | 'number' | 'password' | 'email'
+  /** 输入框尺寸 */
+  size?: 'sm' | 'md' | 'lg'
   /** 前缀图标组件 */
   prefixIcon?: LucideIcon
   /** 是否显示清除按钮 */
@@ -25,9 +27,16 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   hasError?: boolean
 }
 
+const sizeStyles = {
+  sm: 'px-2 py-1 text-xs',
+  md: 'px-3 py-2 text-sm',
+  lg: 'px-4 py-3 text-base'
+}
+
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ 
     type = 'text', 
+    size = 'md',
     prefixIcon: PrefixIcon, 
     clearable = false, 
     error,
@@ -81,8 +90,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           disabled={disabled}
           className={cn(
             // 基础样式
-            'w-full px-3 py-2',
-            'bg-white text-neutral-900 text-sm',
+            'w-full',
+            sizeStyles[size],
+            'bg-white text-neutral-900',
             'border rounded-md',
             'transition-all duration-150 ease-out',
             

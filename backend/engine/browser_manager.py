@@ -1,7 +1,7 @@
 """浏览器管理器 - 负责浏览器连接和生命周期管理。"""
 from typing import Tuple, Optional
 
-from playwright.async_api import PlaywrightError
+from playwright.async_api import Error
 
 
 class BrowserManager:
@@ -82,7 +82,7 @@ class BrowserManager:
             await context.log("info", f"已连接本地浏览器（CDP 模式），reused_page={reused_page}")
             return True, reused_page
 
-        except PlaywrightError as e:
+        except Error as e:
             await context.log("warn", f"CDP 连接失败: {e}")
             context.browser = await self.playwright.chromium.launch(headless=headless)
             context.page = await context.browser.new_page()
@@ -108,7 +108,7 @@ class BrowserManager:
                     if context.page and not context.page.is_closed():
                         await context.page.close()
                         await context.log("debug", "已关闭 CDP 模式下创建的新页面")
-                except PlaywrightError as e:
+                except Error as e:
                     await context.log("debug", f"关闭页面时出错: {e}")
             else:
                 await context.log("debug", "复用的页面保持打开（不关闭）")
@@ -117,7 +117,7 @@ class BrowserManager:
             try:
                 await self.playwright.stop()
                 await context.log("debug", "Playwright 已停止")
-            except PlaywrightError as e:
+            except Error as e:
                 await context.log("debug", f"停止 Playwright 时出错: {e}")
         else:
             await context.log("debug", "无需要清理的资源")

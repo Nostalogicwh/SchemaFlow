@@ -279,7 +279,6 @@ describe('Modal', () => {
       )
       
       const firstButton = screen.getByText('First')
-      const secondButton = screen.getByText('Second')
       
       // 模拟 Tab 键循环
       firstButton.focus()

@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useExecutionStore } from '@/stores/executionStore'
 import { useExecution } from '@/hooks/useExecution'
-import type { NodeExecutionRecord, WSLog, WSUserInputRequired } from '@/types/workflow'
+import type { WSLog, WSUserInputRequired } from '@/types/workflow'
 import { EmptyState } from '@/components/common'
 import { Button } from '@/components/ui/Button'
-import { Badge, type BadgeStatus } from '@/components/ui/Badge'
 import { NodeRecordList } from './NodeRecordList'
 import { twSemanticColors, twColors, twTransitions } from '@/constants/designTokens'
 import { Image, FileText } from 'lucide-react'
@@ -510,14 +509,6 @@ function LogViewer({ logs }: { logs: WSLog[] }) {
       </div>
     </div>
   )
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
-  const minutes = Math.floor(ms / 60000)
-  const seconds = Math.round((ms % 60000) / 1000)
-  return `${minutes}m ${seconds}s`
 }
 
 interface UserInputDialogProps {

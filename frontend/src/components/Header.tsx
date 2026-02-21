@@ -2,9 +2,18 @@ import { useState, useRef } from 'react'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { useExecutionStore } from '@/stores/executionStore'
 import { toast } from '@/stores/uiStore'
-import type { Workflow } from '@/types/workflow'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import type { Workflow } from '@/types/workflow'
+import { 
+  Play, 
+  Square, 
+  Check, 
+  RefreshCw, 
+  PanelRight, 
+  Menu,
+  Workflow as WorkflowIcon
+} from 'lucide-react'
 
 type ExecutionStatus = 'idle' | 'running' | 'success' | 'error'
 type ExecutionMode = 'headless' | 'headed'
@@ -18,19 +27,9 @@ interface HeaderProps {
   sidebarCollapsed?: boolean
 }
 
-import { 
-  Play, 
-  Square, 
-  Check, 
-  RefreshCw, 
-  PanelRight, 
-  Menu,
-  Workflow
-} from 'lucide-react'
-
 const SchemaFlowLogo = () => (
   <div className="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-lg">
-    <Workflow className="w-5 h-5 text-white" />
+    <WorkflowIcon className="w-5 h-5 text-white" />
   </div>
 )
 
