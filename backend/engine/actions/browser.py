@@ -8,7 +8,7 @@ from .utils import locate_element
 @register_action(
     name="open_tab",
     label="打开标签页",
-    description="打开新标签页并跳转到指定 URL",
+    description="在当前标签页跳转到指定 URL（保持登录态）",
     category="browser",
     parameters={
         "type": "object",
@@ -24,7 +24,7 @@ from .utils import locate_element
     outputs=["flow"]
 )
 async def open_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
-    """打开新标签页。
+    """在当前页面跳转（保持登录态）。
 
     Args:
         context: 执行上下文
@@ -37,12 +37,34 @@ async def open_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
     if not url:
         raise ValueError("open_tab 节点需要 url 参数")
 
-    await context.log("info", f"打开标签页: {url}")
-
+    await context.log("info", f"打开页面: {url}")
+    
+    # CDP 模式下在当前页面跳转，保持登录态
+    is_cdp = getattr(context, '_is_cdp', False)
+    
     if context.page is None:
-        context.page = await context.browser.new_page()
-
-    await context.page.goto(url, wait_until="domcontentloaded")
+        # 如果页面不存在，需要创建（这种情况较少）
+        if is_cdp and context.browser:
+            # CDP 模式下尝试复用已有页面
+            default_context = context.browser.contexts[0] if context.browser.contexts else None
+            if default_context and default_context.pages:
+                context.page = default_context.pages[0]
+                await context.log("info", f"复用已有页面: {context.page.url}")
+            else:
+                context.page = await context.browser.new_page()
+                await context.log("info", "创建新页面")
+        else:
+            context.page = await context.browser.new_page()
+            await context.log("info", "创建新页面")
+    
+    # 在当前页面跳转
+    if is_cdp:
+        # CDP 模式使用 networkidle 等待，确保登录态恢复
+        await context.page.goto(url, wait_until="networkidle")
+        await context.log("info", f"页面跳转完成，当前 URL: {context.page.url}")
+    else:
+        await context.page.goto(url, wait_until="domcontentloaded")
+    
     return {"url": url}
 
 

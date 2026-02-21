@@ -17,11 +17,13 @@ async def wait_for_page_stability(page: Page, timeout: int = 5000) -> bool:
         是否成功等待到稳定状态
     """
     try:
-        # 等待网络空闲
+        # 等待网络空闲，但某些SPA页面可能永远达不到networkidle
+        # 所以捕获超时后继续执行
         await page.wait_for_load_state("networkidle", timeout=timeout)
         return True
-    except TimeoutError:
-        # 即使网络未完全空闲，也继续尝试
+    except Exception:
+        # 即使网络未完全空闲，也继续尝试定位
+        # 因为页面可能已经加载足够用于定位
         return False
 
 
@@ -365,8 +367,10 @@ async def locate_with_ai(
     await context.log("info", f"AI定位开始: {ai_target}")
     
     # 1. 智能等待页面稳定
-    await context.log("info", "等待页面稳定...")
-    await wait_for_page_stability(page, timeout=min(5000, timeout // 3))
+    # 给页面稳定更多时间，但不超过总超时的40%
+    stability_timeout = min(15000, int(timeout * 0.4))
+    await context.log("info", f"等待页面稳定... (timeout: {stability_timeout}ms)")
+    await wait_for_page_stability(page, timeout=stability_timeout)
     
     # 2. 首先尝试回退策略（快速路径）
     if enable_fallback:
