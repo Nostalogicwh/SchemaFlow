@@ -9,7 +9,7 @@ import base64
 
 from fastapi import WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
-from openai import AuthenticationError, APIError, OpenAIError
+from openai import AuthenticationError, APIError, OpenAIError, AsyncOpenAI
 
 from .constants import NodeStatus, WSMessageType
 
@@ -19,14 +19,14 @@ _llm_client_instance = None
 
 
 def create_llm_client():
-    """创建 OpenAI 客户端实例（单例模式）。"""
+    """创建 OpenAI 异步客户端实例（单例模式）。"""
     global _llm_client_instance
 
     if _llm_client_instance is not None:
         return _llm_client_instance
 
     try:
-        from openai import OpenAI
+        from openai import AsyncOpenAI
         from config import get_settings
 
         llm_cfg = get_settings().get("llm", {})
@@ -36,7 +36,7 @@ def create_llm_client():
         if not api_key:
             return None
 
-        _llm_client_instance = OpenAI(api_key=api_key, base_url=base_url)
+        _llm_client_instance = AsyncOpenAI(api_key=api_key, base_url=base_url)
         return _llm_client_instance
     except ImportError:
         return None
