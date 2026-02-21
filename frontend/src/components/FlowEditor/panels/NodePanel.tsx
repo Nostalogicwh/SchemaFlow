@@ -4,6 +4,7 @@
 import { useCallback } from 'react'
 import type { Node } from '@xyflow/react'
 import type { ActionMetadata, JsonSchemaProperty } from '@/types/workflow'
+import { EmptyState } from '@/components/common'
 
 interface NodePanelProps {
   selectedNode: Node | null
@@ -27,9 +28,11 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode }: NodePa
 
   if (!selectedNode) {
     return (
-      <div className="p-4 text-gray-500 text-center">
-        <p>选择一个节点查看属性</p>
-      </div>
+      <EmptyState
+        icon="👆"
+        title="未选中节点"
+        description="点击画布中的节点查看和编辑属性"
+      />
     )
   }
 
@@ -37,7 +40,11 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode }: NodePa
     return (
       <div className="p-4">
         <h3 className="font-bold text-lg mb-2">{selectedNode.type}</h3>
-        <p className="text-gray-500">无可配置参数</p>
+        <EmptyState
+          icon="⚙️"
+          title="无可配置参数"
+          description="此节点类型没有可配置的参数"
+        />
       </div>
     )
   }

@@ -179,3 +179,47 @@ async def set_variable_action(context: Any, config: Dict[str, Any]) -> Dict[str,
     await context.log("info", f"设置变量 {name} = {value[:50]}...")
 
     return {name: value}
+
+
+@register_action(
+    name="custom_script",
+    label="自定义脚本",
+    description="执行自定义Python脚本",
+    category="data",
+    parameters={
+        "type": "object",
+        "properties": {
+            "script": {
+                "type": "string",
+                "description": "Python脚本代码"
+            }
+        },
+        "required": ["script"]
+    },
+    inputs=["any"],
+    outputs=["any"]
+)
+async def custom_script_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
+    """执行自定义Python脚本。"""
+    script = config.get("script")
+    if not script:
+        raise ValueError("custom_script 节点需要 script 参数")
+
+    await context.log("info", f"执行自定义脚本: {script[:50]}...")
+
+    local_vars = {
+        "variables": context.variables,
+        "context": context,
+    }
+
+    try:
+        exec(script, {}, local_vars)
+    except Exception as e:
+        raise ValueError(f"脚本执行失败: {str(e)}")
+
+    result = local_vars.get("result")
+    context.variables = local_vars.get("variables", context.variables)
+
+    await context.log("info", f"脚本执行完成，结果: {result}")
+
+    return {"result": result}

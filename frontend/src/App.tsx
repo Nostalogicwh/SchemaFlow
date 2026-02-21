@@ -1,8 +1,9 @@
-import { useCallback } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { FlowEditor } from '@/components/FlowEditor'
 import { WorkflowList } from '@/components/WorkflowList'
 import { ExecutionPanel } from '@/components/ExecutionPanel'
-import { Toast, ErrorBoundary, ConfirmDialog } from '@/components/common'
+import { Header } from '@/components/Header'
+import { Toast, ErrorBoundary, ConfirmDialog, EmptyState } from '@/components/common'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { useExecutionStore } from '@/stores/executionStore'
 import { toast } from '@/stores/uiStore'
@@ -12,10 +13,24 @@ import { workflowApi } from '@/api'
 function App() {
   const { currentWorkflow, selectedId, saveWorkflow } = useWorkflowStore()
 
-  const { showPanel, executionMode, executionState, setExecutionMode, setShowPanel } =
+  const { showPanel, executionMode, executionState, setShowPanel } =
     useExecutionStore()
 
-  const { connect, startExecution, reset: resetExecution } = useExecution()
+  const { connect, startExecution, stopExecution, reset: resetExecution } = useExecution()
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768
+      setIsMobile(mobile)
+      if (mobile) setSidebarCollapsed(true)
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   const handleExecute = useCallback(async () => {
     if (!selectedId) return
@@ -71,52 +86,68 @@ function App() {
     <div className="h-screen flex flex-col bg-gray-100">
       <Toast />
       <ConfirmDialog />
-      <header className="h-12 bg-white border-b flex items-center justify-between px-4 shrink-0">
-        <h1 className="font-bold text-lg">SchemaFlow</h1>
-        <div className="flex items-center gap-4">
-          {currentWorkflow && (
-            <>
-              <span className="text-sm text-gray-600">{currentWorkflow.name}</span>
-              <select
-                value={executionMode}
-                onChange={(e) => setExecutionMode(e.target.value as 'headless' | 'headed')}
-                className="px-2 py-1 text-sm border border-gray-300 rounded bg-white"
-              >
-                <option value="headless">后台执行</option>
-                <option value="headed">前台执行</option>
-              </select>
-              <button
-                onClick={handleExecute}
-                className="px-4 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600"
-              >
-                ▶ 执行
-              </button>
-              <button
-                onClick={() => setShowPanel(!showPanel)}
-                className={`px-3 py-1 text-sm rounded border ${
-                  showPanel
-                    ? 'bg-gray-200 border-gray-400'
-                    : 'bg-white border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                {showPanel ? '隐藏监控' : '显示监控'}
-              </button>
-            </>
-          )}
-        </div>
-      </header>
+      <Header
+        onExecute={handleExecute}
+        onStop={stopExecution}
+        onTogglePanel={() => setShowPanel(!showPanel)}
+        showPanel={showPanel}
+        onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+        sidebarCollapsed={sidebarCollapsed}
+      />
 
-      <div className="flex-1 flex overflow-hidden">
-        <aside className="w-56 bg-white border-r shrink-0">
-          <WorkflowList
-            selectedId={selectedId}
-            onSelect={handleSelectWorkflow}
-            onCreate={handleCreateWorkflow}
-            refreshKey={useWorkflowStore.getState().listVersion}
-          />
+      <div className="flex-1 flex overflow-hidden relative">
+        <aside
+          className={`bg-white border-r shrink-0 transition-all duration-300 ease-in-out ${
+            sidebarCollapsed ? 'w-0 md:w-14' : 'w-56 md:w-56'
+          }`}
+        >
+          <div className={`h-full overflow-hidden ${sidebarCollapsed ? 'hidden md:block' : ''}`}>
+            <div className="hidden md:flex h-full w-14 items-center justify-center border-r">
+              <button
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="p-2 hover:bg-gray-100 rounded"
+                title={sidebarCollapsed ? '展开' : '折叠'}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            </div>
+            {!sidebarCollapsed && (
+              <WorkflowList
+                selectedId={selectedId}
+                onSelect={handleSelectWorkflow}
+                onCreate={handleCreateWorkflow}
+                refreshKey={useWorkflowStore.getState().listVersion}
+              />
+            )}
+          </div>
         </aside>
 
-        <main className="flex-1 overflow-hidden">
+        {sidebarCollapsed && isMobile && (
+          <div
+            className="fixed inset-0 bg-black/30 z-40 md:hidden"
+            onClick={() => setSidebarCollapsed(false)}
+          />
+        )}
+
+        {sidebarCollapsed && isMobile && (
+          <aside className="fixed left-0 top-12 bottom-0 w-56 bg-white border-r z-50 animate-slide-in md:hidden">
+            <WorkflowList
+              selectedId={selectedId}
+              onSelect={(id) => {
+                handleSelectWorkflow(id)
+                setSidebarCollapsed(true)
+              }}
+              onCreate={() => {
+                handleCreateWorkflow()
+              }}
+              refreshKey={useWorkflowStore.getState().listVersion}
+            />
+          </aside>
+        )}
+
+        <main className="flex-1 overflow-hidden min-w-0">
           {currentWorkflow ? (
             <ErrorBoundary>
               <FlowEditor
@@ -126,22 +157,17 @@ function App() {
               />
             </ErrorBoundary>
           ) : (
-            <div className="h-full flex items-center justify-center text-gray-500">
-              <div className="text-center">
-                <p className="text-lg mb-2">选择或创建一个工作流开始</p>
-                <button
-                  onClick={handleCreateWorkflow}
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                >
-                  创建工作流
-                </button>
-              </div>
-            </div>
+            <EmptyState
+              icon="🚀"
+              title="开始使用 SchemaFlow"
+              description="选择一个现有工作流或创建新的工作流"
+              action={{ label: '创建工作流', onClick: handleCreateWorkflow }}
+            />
           )}
         </main>
 
         {showPanel && (
-          <aside className="w-96 border-l shrink-0">
+          <aside className="w-full md:w-80 lg:w-96 border-l shrink-0 absolute md:relative right-0 top-0 bottom-0 bg-white z-30 md:z-auto">
             <ExecutionPanel />
           </aside>
         )}

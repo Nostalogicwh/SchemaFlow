@@ -1,19 +1,17 @@
 import type { NodeStatus } from '@/types/workflow'
+import { twColors, categoryGradients, statusRing } from './designTokens'
 
 export const statusStyles: Record<NodeStatus, string> = {
-  idle: '',
-  running: 'ring-2 ring-blue-500 ring-offset-2 animate-pulse',
-  completed: 'ring-2 ring-green-500 ring-offset-2',
-  failed: 'ring-2 ring-red-500 ring-offset-2',
+  idle: statusRing.idle,
+  running: 'ring-2 ring-blue-400 ring-offset-1 animate-pulse',
+  completed: statusRing.completed,
+  failed: statusRing.failed,
 }
 
-export const categoryColors: Record<string, { bg: string; border: string; text: string }> = {
-  base: { bg: 'bg-gray-100', border: 'border-gray-400', text: 'text-gray-700' },
-  browser: { bg: 'bg-blue-50', border: 'border-blue-400', text: 'text-blue-700' },
-  data: { bg: 'bg-green-50', border: 'border-green-400', text: 'text-green-700' },
-  control: { bg: 'bg-yellow-50', border: 'border-yellow-400', text: 'text-yellow-700' },
-  ai: { bg: 'bg-purple-50', border: 'border-purple-400', text: 'text-purple-700' },
-}
+export type CategoryStyle = { bg: string; border: string; text: string; accent: string }
+export const categoryColors: Record<string, CategoryStyle> = twColors.category
+
+export { categoryGradients }
 
 export const browserIcons: Record<string, string> = {
   open_tab: '🌐',
@@ -38,4 +36,10 @@ export const controlIcons: Record<string, string> = {
   wait: '⏱️',
   wait_for_element: '👁️',
   user_input: '🙋',
+}
+
+export const aiIcons: Record<string, string> = {
+  ai_action: '🤖',
+  ai_chat: '💬',
+  ai_extract: '🧠',
 }

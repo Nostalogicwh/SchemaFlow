@@ -242,3 +242,206 @@ async def screenshot_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
             f.write(screenshot_bytes)
 
     return {"data": base64_data}
+
+
+@register_action(
+    name="switch_tab",
+    label="切换标签页",
+    description="切换到指定的标签页",
+    category="browser",
+    parameters={
+        "type": "object",
+        "properties": {
+            "index": {
+                "type": "integer",
+                "description": "标签页索引（从0开始），与 title_match 二选一"
+            },
+            "title_match": {
+                "type": "string",
+                "description": "按标题模糊匹配标签页，与 index 二选一"
+            }
+        }
+    },
+    inputs=["flow"],
+    outputs=["flow"]
+)
+async def switch_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
+    """切换标签页。"""
+    if not context.browser:
+        raise ValueError("浏览器未初始化")
+
+    contexts = context.browser.contexts
+    if not contexts:
+        raise ValueError("没有可用的浏览器上下文")
+
+    pages = contexts[0].pages
+    if not pages:
+        raise ValueError("没有可用的标签页")
+
+    index = config.get("index")
+    title_match = config.get("title_match")
+
+    if index is not None:
+        if index < 0 or index >= len(pages):
+            raise ValueError(f"标签页索引 {index} 超出范围（0-{len(pages)-1}）")
+        target_page = pages[index]
+        await context.log("info", f"切换到标签页 {index}: {target_page.url}")
+    elif title_match is not None:
+        target_page = None
+        for i, page in enumerate(pages):
+            page_title = await page.title()
+            if title_match.lower() in page_title.lower():
+                target_page = page
+                await context.log("info", f"切换到标签页（标题匹配）{i}: {page.url}")
+                break
+        if target_page is None:
+            raise ValueError(f"找不到标题包含「{title_match}」的标签页")
+    else:
+        raise ValueError("必须提供 index 或 title_match 参数")
+
+    context.page = target_page
+    return {"page_url": target_page.url, "page_title": await target_page.title()}
+
+
+@register_action(
+    name="close_tab",
+    label="关闭标签页",
+    description="关闭当前标签页",
+    category="browser",
+    parameters={
+        "type": "object",
+        "properties": {},
+    },
+    inputs=["flow"],
+    outputs=["flow"]
+)
+async def close_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
+    """关闭当前标签页。"""
+    if not context.page:
+        raise ValueError("当前没有打开的标签页")
+
+    contexts = context.browser.contexts
+    if not contexts:
+        raise ValueError("没有可用的浏览器上下文")
+
+    pages = contexts[0].pages
+    if len(pages) <= 1:
+        raise ValueError("无法关闭最后一个标签页")
+
+    current_url = context.page.url
+    await context.page.close()
+
+    remaining_pages = contexts[0].pages
+    if remaining_pages:
+        context.page = remaining_pages[-1]
+        await context.log("info", f"关闭标签页 {current_url}，切换到 {context.page.url}")
+    else:
+        context.page = None
+        await context.log("info", f"关闭标签页 {current_url}，没有剩余标签页")
+
+    return {"closed_url": current_url, "current_url": context.page.url if context.page else None}
+
+
+@register_action(
+    name="select_option",
+    label="下拉选择",
+    description="在下拉框中选择指定选项",
+    category="browser",
+    parameters={
+        "type": "object",
+        "properties": {
+            "selector": {
+                "type": "string",
+                "description": "CSS选择器"
+            },
+            "value": {
+                "type": "string",
+                "description": "要选择的选项值（option的value属性）"
+            },
+            "label": {
+                "type": "string",
+                "description": "要选择的选项文本（option的显示文本），与 value 二选一"
+            }
+        },
+        "required": ["selector"]
+    },
+    inputs=["flow"],
+    outputs=["flow"]
+)
+async def select_option_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
+    """在下拉框中选择指定选项。"""
+    if not context.page:
+        raise ValueError("页面未初始化")
+
+    selector = config.get("selector")
+    if not selector:
+        raise ValueError("select_option 节点需要 selector 参数")
+
+    value = config.get("value")
+    label = config.get("label")
+
+    if not value and not label:
+        raise ValueError("必须提供 value 或 label 参数")
+
+    element = await locate_element(context.page, selector)
+    await element.wait_for(state="visible", timeout=30000)
+
+    if value:
+        await element.select_option(value=value)
+        await context.log("info", f"选择下拉框选项（value）: {selector} = {value}")
+    else:
+        await element.select_option(label=label)
+        await context.log("info", f"选择下拉框选项（label）: {selector} = {label}")
+
+    return {"selector": selector, "selected_value": value, "selected_label": label}
+
+
+@register_action(
+    name="scroll",
+    label="滚动页面",
+    description="滚动页面到指定位置",
+    category="browser",
+    parameters={
+        "type": "object",
+        "properties": {
+            "pixels": {
+                "type": "integer",
+                "description": "滚动像素数，正数向下滚动，负数向上滚动"
+            },
+            "to_bottom": {
+                "type": "boolean",
+                "description": "是否滚动到页面底部"
+            },
+            "to_top": {
+                "type": "boolean",
+                "description": "是否滚动到页面顶部"
+            }
+        }
+    },
+    inputs=["flow"],
+    outputs=["flow"]
+)
+async def scroll_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
+    """滚动页面。"""
+    if not context.page:
+        raise ValueError("页面未初始化")
+
+    pixels = config.get("pixels")
+    to_bottom = config.get("to_bottom", False)
+    to_top = config.get("to_top", False)
+
+    if to_bottom:
+        await context.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await context.log("info", "滚动到页面底部")
+        return {"action": "to_bottom"}
+    elif to_top:
+        await context.page.evaluate("window.scrollTo(0, 0)")
+        await context.log("info", "滚动到页面顶部")
+        return {"action": "to_top"}
+    elif pixels is not None:
+        await context.page.evaluate(f"window.scrollBy(0, {pixels})")
+        direction = "向下" if pixels > 0 else "向上"
+        await context.log("info", f"{direction}滚动 {abs(pixels)} 像素")
+        return {"action": "scroll", "pixels": pixels}
+    else:
+        raise ValueError("必须提供 pixels、to_bottom 或 to_top 参数")

@@ -1,30 +1,31 @@
 """公共工具函数。"""
 import re
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+
+from ..ai_locator import locate_with_ai
 
 
-async def locate_element(page, selector: str = None, ai_target: str = None, context=None):
-    """统一的元素定位函数。
-
-    优先使用 selector，若为空则使用 ai_target 语义定位。
+async def locate_element(page, selector: Optional[str] = None, ai_target: Optional[str] = None, context=None):
+    """定位页面元素，支持CSS选择器或AI定位。
 
     Args:
-        page: Playwright 页面实例
-        selector: CSS 选择器（优先）
-        ai_target: 语义描述目标元素
-        context: 执行上下文（用于日志）
+        page: Playwright页面对象
+        selector: CSS选择器（可选）
+        ai_target: AI定位描述（可选）
+        context: 执行上下文，用于AI定位
 
     Returns:
-        定位到的 Locator
-
-    Raises:
-        ValueError: 未提供 selector 或 ai_target
+        Playwright Locator对象
     """
-    if selector:
-        return page.locator(selector)
-    if ai_target:
-        return await _locate_by_ai_target(page, ai_target, context)
-    raise ValueError("必须提供 selector 或 ai_target")
+    if ai_target and not selector:
+        if not context:
+            raise ValueError("AI定位需要提供context")
+        selector = await locate_with_ai(page, ai_target, context)
+
+    if not selector:
+        raise ValueError("必须提供 selector 或 ai_target 参数")
+
+    return page.locator(selector)
 
 
 async def _locate_by_ai_target(page, ai_target: str, context=None):

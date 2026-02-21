@@ -96,17 +96,37 @@ export function FlowEditor(props: FlowEditorProps) {
 }
 
 function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave }: FlowEditorProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
+  const [nodes, setNodes, onNodesState] = useNodesState<FlowNode>([])
+  const [edges, setEdges, onEdgesState] = useEdgesState<Edge>([])
   const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null)
   const [actions, setActions] = useState<ActionMetadata[]>([])
+  const [showPanel, setShowPanel] = useState(true)
+  const [showMiniMap, setShowMiniMap] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
   const { screenToFlowPosition } = useReactFlow()
 
   const storeNodeStatuses = useExecutionStore((state) => state.executionState.nodeStatuses)
   const nodeStatuses = externalNodeStatuses || storeNodeStatuses
 
+  const onNodesChange = onNodesState
+  const onEdgesChange = onEdgesState
+
   useEffect(() => {
     actionApi.list().then(setActions).catch(console.error)
+  }, [])
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768
+      setIsMobile(mobile)
+      if (mobile) {
+        setShowMiniMap(false)
+        setShowPanel(false)
+      }
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
   useEffect(() => {
@@ -115,7 +135,8 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
       setNodes(flowNodes)
       setEdges(flowEdges)
     }
-  }, [workflow, setNodes, setEdges])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflow?.id])
 
   useEffect(() => {
     setNodes((nds) =>
@@ -236,12 +257,12 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
   }, [workflow, nodes, edges, onSave])
 
   return (
-    <div className="flex h-full">
-      <div className="w-48 border-r bg-white">
+    <div className="flex h-full relative">
+      <div className={`border-r bg-white shrink-0 transition-all duration-300 ${isMobile ? 'hidden' : 'w-48'}`}>
         <Toolbar actions={actions} onAIGenerate={handleAIGenerate} />
       </div>
 
-      <div className="flex-1 h-full" style={{ minHeight: '400px' }}>
+      <div className="flex-1 h-full min-w-0" style={{ minHeight: '400px' }}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -256,29 +277,70 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
           fitView
         >
           <Background />
-          <Controls />
-          <MiniMap />
+          <Controls showInteractive={false} />
+          {showMiniMap && !isMobile && <MiniMap />}
         </ReactFlow>
+        {isMobile && (
+          <button
+            onClick={() => setShowMiniMap(!showMiniMap)}
+            className="absolute bottom-16 left-2 z-10 px-2 py-1 bg-white border rounded shadow text-xs hover:bg-gray-50"
+          >
+            {showMiniMap ? '隐藏地图' : '显示地图'}
+          </button>
+        )}
       </div>
 
-      <div className="w-72 border-l bg-white overflow-y-auto">
-        <div className="p-2 border-b flex justify-between items-center">
-          <span className="font-medium text-sm">属性</span>
-          {onSave && (
-            <button
-              onClick={handleSave}
-              className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
-            >
-              保存
-            </button>
-          )}
-        </div>
-        <NodePanel
-          selectedNode={selectedNode}
-          actionMetadata={actions}
-          onUpdateNode={handleUpdateNode}
-        />
+      <div
+        className={`border-l bg-white overflow-y-auto shrink-0 transition-all duration-300 ${
+          isMobile
+            ? showPanel
+              ? 'fixed right-0 top-12 bottom-0 w-72 z-20'
+              : 'hidden'
+            : showPanel
+              ? 'w-72 lg:w-80'
+              : 'w-0 overflow-hidden'
+        }`}
+      >
+        {showPanel && (
+          <>
+            <div className="p-2 border-b flex justify-between items-center">
+              <span className="font-medium text-sm">属性</span>
+              <div className="flex items-center gap-2">
+                {onSave && (
+                  <button
+                    onClick={handleSave}
+                    className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+                  >
+                    保存
+                  </button>
+                )}
+                {isMobile && (
+                  <button
+                    onClick={() => setShowPanel(false)}
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+            <NodePanel
+              selectedNode={selectedNode}
+              actionMetadata={actions}
+              onUpdateNode={handleUpdateNode}
+            />
+          </>
+        )}
       </div>
+
+      {isMobile && selectedNode && !showPanel && (
+        <button
+          onClick={() => setShowPanel(true)}
+          className="absolute right-2 top-2 z-10 px-3 py-1.5 bg-blue-500 text-white text-sm rounded shadow hover:bg-blue-600"
+        >
+          属性
+        </button>
+      )}
     </div>
   )
 }
