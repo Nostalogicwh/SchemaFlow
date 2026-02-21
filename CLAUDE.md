@@ -21,6 +21,7 @@ SchemaFlow 是一个 Web 自动化编排平台，支持双模式驱动：前端�
 ### 后端
 ```bash
 cd backend
+source .venv/bin/activate         # 激活虚拟环境（Python 3.9）
 pip install -r requirements.txt
 playwright install chromium
 python main.py                    # 启动 FastAPI，端口 8000，热重载
@@ -46,13 +47,15 @@ cd backend && python test_backend.py
 ### 后端（Python / FastAPI）
 
 - **入口**：`backend/main.py` — 创建 FastAPI 应用，注册 CORS 和所有路由
-- **API 层**（`backend/api/`）：工作流 CRUD（`workflows.py`）、节点 Schema 查询（`actions.py`）、执行启停（`execution.py`）、WebSocket 端点（`websocket.py`）
+- **配置**：`backend/config.py` — 单例配置加载器，读取 `settings.toml`，叠加 `settings.local.toml`（gitignored），环境变量可覆盖
+- **API 层**（`backend/api/`）：工作流 CRUD（`workflows.py`）、节点 Schema 查询（`actions.py`）、执行启停（`execution.py`）、WebSocket 端点（`websocket.py`）、AI 工作流生成（`ai_generate.py`）
 - **引擎**（`backend/engine/`）：
   - `executor.py` — `WorkflowExecutor` 对工作流 DAG 做拓扑排序后顺序执行节点，管理 Playwright 浏览器生命周期
   - `context.py` — `ExecutionContext` 持有单次执行的状态：浏览器/页面、变量、剪贴板、日志、截图，以及通过 `asyncio.Event` 实现的用户输入同步
   - `actions/registry.py` — `ActionRegistry` 单例 + `@register_action` 装饰器；每个动作定义元数据（JSON Schema 参数、端口）和异步执行函数
-  - `actions/` — 按分类实现节点：`base.py`（start/end）、`browser.py`（open_tab、navigate、click、input_text、screenshot）、`data.py`（extract_text、剪贴板操作、set_variable）、`control.py`（wait、wait_for_element、user_input）、`ai.py`（ai_action）
-- **存储层**（`backend/storage/`）：`StorageBase` 抽象基类 + `JSONFileStorage` 实现，将工作流和执行日志以 JSON 文件存储在 `data/` 目录下
+  - `actions/` — 按分类实现节点：`base.py`（start/end）、`browser.py`（open_tab、navigate、click、input_text、screenshot）、`data.py`（extract_text、剪贴板操作、set_variable）、`control.py`（wait、wait_for_element、user_input）
+- **存储层**（`backend/storage/`）：`StorageBase` 抽象基类 + `JSONFileStorage`（`file_storage.py`），将工作流和执行日志以 JSON 文件存储在 `data/` 目录下
+- **执行记录仓储**（`backend/repository/`）：`ExecutionRepository` 抽象基类 + `JSONExecutionRepository`，结构化节点执行记录持久化
 
 ### 前端（React + TypeScript + Vite）
 
