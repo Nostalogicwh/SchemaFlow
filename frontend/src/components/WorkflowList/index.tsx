@@ -1,7 +1,5 @@
-/**
- * 工作流列表组件
- */
 import { useEffect, useState } from 'react'
+import { useWorkflowStore } from '@/stores/workflowStore'
 import type { WorkflowListItem } from '@/types/workflow'
 import { workflowApi } from '@/api'
 
@@ -15,8 +13,8 @@ interface WorkflowListProps {
 export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: WorkflowListProps) {
   const [workflows, setWorkflows] = useState<WorkflowListItem[]>([])
   const [loading, setLoading] = useState(true)
+  const refreshList = useWorkflowStore((state) => state.refreshList)
 
-  // 加载工作流列表
   const loadWorkflows = async () => {
     try {
       setLoading(true)
@@ -33,7 +31,6 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
     loadWorkflows()
   }, [refreshKey])
 
-  // 删除工作流
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!confirm('确定删除此工作流？')) return
@@ -41,6 +38,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
     try {
       await workflowApi.delete(id)
       setWorkflows((prev) => prev.filter((w) => w.id !== id))
+      refreshList()
     } catch (error) {
       console.error('删除工作流失败:', error)
     }
@@ -56,7 +54,6 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
 
   return (
     <div className="h-full flex flex-col">
-      {/* 标题栏 */}
       <div className="p-3 border-b flex justify-between items-center">
         <h2 className="font-bold text-sm">工作流</h2>
         <button
@@ -67,7 +64,6 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
         </button>
       </div>
 
-      {/* 列表 */}
       <div className="flex-1 overflow-y-auto">
         {workflows.length === 0 ? (
           <div className="p-4 text-center text-gray-500 text-sm">
@@ -107,7 +103,6 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
         )}
       </div>
 
-      {/* 刷新按钮 */}
       <div className="p-2 border-t">
         <button
           onClick={loadWorkflows}

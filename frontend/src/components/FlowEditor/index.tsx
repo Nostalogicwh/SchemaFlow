@@ -1,6 +1,3 @@
-/**
- * 可视化工作流编辑器
- */
 import { useCallback, useEffect, useState } from 'react'
 import {
   ReactFlow,
@@ -22,10 +19,10 @@ import '@xyflow/react/dist/style.css'
 import { nodeTypes, nodeCategoryMap } from './nodes'
 import { NodePanel } from './panels/NodePanel'
 import { Toolbar } from './panels/Toolbar'
+import { useExecutionStore } from '@/stores/executionStore'
 import type { ActionMetadata, Workflow, WorkflowNode, WorkflowEdge, NodeStatus } from '@/types/workflow'
 import { actionApi } from '@/api'
 
-// 节点数据类型
 type FlowNodeData = {
   label: string
   category: string
@@ -42,7 +39,6 @@ interface FlowEditorProps {
   onSave?: (workflow: Workflow) => void
 }
 
-// 将后端工作流格式转换为 ReactFlow 格式
 function workflowToFlow(workflow: Workflow): { nodes: FlowNode[]; edges: Edge[] } {
   const nodes: FlowNode[] = workflow.nodes.map((node, index) => ({
     id: node.id,
@@ -66,7 +62,6 @@ function workflowToFlow(workflow: Workflow): { nodes: FlowNode[]; edges: Edge[] 
   return { nodes, edges }
 }
 
-// 将 ReactFlow 格式转换为后端工作流格式
 function flowToWorkflow(
   nodes: FlowNode[],
   edges: Edge[],
@@ -100,19 +95,20 @@ export function FlowEditor(props: FlowEditorProps) {
   )
 }
 
-function FlowEditorInner({ workflow, nodeStatuses = {}, onSave }: FlowEditorProps) {
+function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave }: FlowEditorProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null)
   const [actions, setActions] = useState<ActionMetadata[]>([])
   const { screenToFlowPosition } = useReactFlow()
 
-  // 加载节点元数据
+  const storeNodeStatuses = useExecutionStore((state) => state.executionState.nodeStatuses)
+  const nodeStatuses = externalNodeStatuses || storeNodeStatuses
+
   useEffect(() => {
     actionApi.list().then(setActions).catch(console.error)
   }, [])
 
-  // 加载工作流
   useEffect(() => {
     if (workflow) {
       const { nodes: flowNodes, edges: flowEdges } = workflowToFlow(workflow)
@@ -121,7 +117,6 @@ function FlowEditorInner({ workflow, nodeStatuses = {}, onSave }: FlowEditorProp
     }
   }, [workflow, setNodes, setEdges])
 
-  // 更新节点状态
   useEffect(() => {
     setNodes((nds) =>
       nds.map((node) => ({
@@ -134,7 +129,6 @@ function FlowEditorInner({ workflow, nodeStatuses = {}, onSave }: FlowEditorProp
     )
   }, [nodeStatuses, setNodes])
 
-  // 连线
   const onConnect: OnConnect = useCallback(
     (connection: Connection) => {
       setEdges((eds) => addEdge(connection, eds))
@@ -142,17 +136,14 @@ function FlowEditorInner({ workflow, nodeStatuses = {}, onSave }: FlowEditorProp
     [setEdges]
   )
 
-  // 选中节点
   const onNodeClick = useCallback((_: React.MouseEvent, node: FlowNode) => {
     setSelectedNode(node)
   }, [])
 
-  // 取消选中
   const onPaneClick = useCallback(() => {
     setSelectedNode(null)
   }, [])
 
-  // 更新节点配置
   const handleUpdateNode = useCallback(
     (nodeId: string, config: Record<string, unknown>) => {
       setNodes((nds) =>
@@ -162,7 +153,6 @@ function FlowEditorInner({ workflow, nodeStatuses = {}, onSave }: FlowEditorProp
             : node
         )
       )
-      // 同步更新选中节点
       setSelectedNode((prev) =>
         prev?.id === nodeId
           ? { ...prev, data: { ...prev.data, config } }
@@ -172,7 +162,6 @@ function FlowEditorInner({ workflow, nodeStatuses = {}, onSave }: FlowEditorProp
     [setNodes]
   )
 
-  // 拖放添加节点
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
@@ -209,13 +198,11 @@ function FlowEditorInner({ workflow, nodeStatuses = {}, onSave }: FlowEditorProp
     [setNodes, screenToFlowPosition]
   )
 
-  // AI 编排：将生成的节点和连线添加到画布
   const handleAIGenerate = useCallback(
     (
       aiNodes: { id: string; type: string; label?: string; config: Record<string, unknown> }[],
       aiEdges: { source: string; target: string }[]
     ) => {
-      // 将 AI 生成的节点转为 FlowNode，纵向自动布局
       const startY = 100
       const gapY = 120
       const newNodes: FlowNode[] = aiNodes.map((n, i) => ({
@@ -242,7 +229,6 @@ function FlowEditorInner({ workflow, nodeStatuses = {}, onSave }: FlowEditorProp
     [setNodes, setEdges]
   )
 
-  // 保存工作流
   const handleSave = useCallback(() => {
     if (!workflow || !onSave) return
     const updatedWorkflow = flowToWorkflow(nodes, edges, workflow)
@@ -251,12 +237,10 @@ function FlowEditorInner({ workflow, nodeStatuses = {}, onSave }: FlowEditorProp
 
   return (
     <div className="flex h-full">
-      {/* 左侧工具栏 */}
       <div className="w-48 border-r bg-white">
         <Toolbar actions={actions} onAIGenerate={handleAIGenerate} />
       </div>
 
-      {/* 中间画布 */}
       <div className="flex-1 h-full" style={{ minHeight: '400px' }}>
         <ReactFlow
           nodes={nodes}
@@ -277,7 +261,6 @@ function FlowEditorInner({ workflow, nodeStatuses = {}, onSave }: FlowEditorProp
         </ReactFlow>
       </div>
 
-      {/* 右侧属性面板 */}
       <div className="w-72 border-l bg-white overflow-y-auto">
         <div className="p-2 border-b flex justify-between items-center">
           <span className="font-medium text-sm">属性</span>

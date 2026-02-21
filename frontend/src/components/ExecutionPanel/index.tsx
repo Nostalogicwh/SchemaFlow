@@ -1,32 +1,27 @@
-/**
- * 执行监控面板 - 显示执行状态、截图、节点记录和日志
- */
 import { useState } from 'react'
-import type { ExecutionState, WSUserInputRequired, NodeExecutionRecord } from '@/types/workflow'
+import { useExecutionStore } from '@/stores/executionStore'
+import { useExecution } from '@/hooks/useExecution'
+import type { NodeExecutionRecord } from '@/types/workflow'
 
 type TabType = 'screenshot' | 'nodes' | 'logs'
 
-interface ExecutionPanelProps {
-  executionState: ExecutionState
-  isConnected: boolean
-  onStart: () => void
-  onStop: () => void
-  onUserInputResponse: (nodeId: string, action: 'continue' | 'cancel') => void
-}
+export function ExecutionPanel() {
+  const { executionState, isConnected } = useExecutionStore()
+  const { startExecution, stopExecution, respondUserInput } = useExecution()
 
-export function ExecutionPanel({
-  executionState,
-  isConnected,
-  onStart,
-  onStop,
-  onUserInputResponse,
-}: ExecutionPanelProps) {
   const { isRunning, screenshot, logs, userInputRequest, nodeRecords } = executionState
   const [activeTab, setActiveTab] = useState<TabType>('screenshot')
 
+  const handleStart = () => {
+    const { executionMode } = useExecutionStore.getState()
+    const workflowId = useExecutionStore.getState().executionState.executionId
+    if (workflowId) {
+      startExecution(workflowId, executionMode)
+    }
+  }
+
   return (
     <div className="h-full flex flex-col bg-gray-900 text-white">
-      {/* 控制栏 */}
       <div className="p-3 border-b border-gray-700 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span
@@ -40,7 +35,7 @@ export function ExecutionPanel({
         </div>
         <div className="flex gap-2">
           <button
-            onClick={onStart}
+            onClick={handleStart}
             disabled={isRunning}
             className={`
               px-3 py-1 text-sm rounded
@@ -52,7 +47,7 @@ export function ExecutionPanel({
             ▶ 执行
           </button>
           <button
-            onClick={onStop}
+            onClick={stopExecution}
             disabled={!isRunning}
             className={`
               px-3 py-1 text-sm rounded
@@ -66,15 +61,13 @@ export function ExecutionPanel({
         </div>
       </div>
 
-      {/* 用户输入请求 */}
       {userInputRequest && (
         <UserInputDialog
           request={userInputRequest}
-          onResponse={onUserInputResponse}
+          onResponse={respondUserInput}
         />
       )}
 
-      {/* Tab 切换 */}
       <div className="flex border-b border-gray-700 text-sm">
         {([
           ['screenshot', '截图'],
@@ -98,7 +91,6 @@ export function ExecutionPanel({
         ))}
       </div>
 
-      {/* Tab 内容 */}
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'screenshot' && (
           <div className="h-full p-2">
@@ -150,7 +142,6 @@ export function ExecutionPanel({
   )
 }
 
-// 节点执行记录列表
 function NodeRecordList({ records }: { records: NodeExecutionRecord[] }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
@@ -217,6 +208,9 @@ function NodeRecordList({ records }: { records: NodeExecutionRecord[] }) {
     </div>
   )
 }
+
+import type { WSUserInputRequired } from '@/types/workflow'
+
 interface UserInputDialogProps {
   request: WSUserInputRequired
   onResponse: (nodeId: string, action: 'continue' | 'cancel') => void
