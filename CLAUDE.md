@@ -2,103 +2,137 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## ⚠️ 关键约束
+## 关键约束
 
-- **Python 版本为 3.9**：后端运行在 Python 3.9 环境下，禁止使用 3.10+ 语法（如 `X | Y` 类型联合，必须用 `Optional[X]` 或 `Union[X, Y]`；禁止 `match/case`）
-- **验证必须使用 venv Python**：提交前验证必须使用 `backend/.venv/bin/python`，不得使用系统 Python（系统 Python 版本可能更高，会掩盖兼容性问题）
-- **验证必须覆盖所有改动文件**：语法检查和导入测试必须包含本次改动涉及的所有 `.py` 文件，不能只跑固定列表
+- **Python 3.9**：后端运行在 Python 3.9 环境下。禁止 `X | Y` 类型联合（用 `Optional[X]` 或 `Union[X, Y]`），禁止 `match/case`
+- **验证必须使用 venv Python**：`backend/.venv/bin/python`，不得使用系统 Python
+- **验证必须覆盖所有改动文件**：语法检查和导入测试必须包含本次改动涉及的所有 `.py` 文件
+- **中文项目**：所有代码注释、文档字符串使用中文。变量名和函数名使用英文（TypeScript camelCase，Python snake_case）
 
 ## 项目概述
 
-SchemaFlow 是一个 Web 自动化编排平台，支持双模式驱动：前端拖拽连线的 RPA 模式，以及大模型通过 Function Calling 自动组装的 Agent 模式。后端运行 Playwright 浏览器实例，通过 WebSocket 将执行状态和实时截图推送到前端。
+SchemaFlow 是一个 Web 自动化编排平台，支持两种模式：
+- **RPA 模式**：前端拖拽连线构建工作流
+- **Agent 模式**：大模型通过自然语言描述自动生成工作流
 
-## 语言与风格
+后端运行 Playwright 浏览器实例，通过 WebSocket 将执行状态和实时截图推送到前端。支持 CDP 连接用户本地浏览器（保留登录态）和独立 headless 浏览器两种执行方式。
 
-这是一个中文项目。所有代码注释、文档字符串必须使用中文。变量名和函数名使用英文（TypeScript 用 camelCase，Python 用 snake_case）。详见 `.agents.yaml`。
+## 技术栈
+
+| 层 | 技术 |
+|---|------|
+| 前端 | React 19 + TypeScript + Vite + Tailwind CSS v4 + @xyflow/react |
+| 后端 | FastAPI + Python 3.9 + Playwright + asyncio |
+| AI | OpenAI 兼容 API（DeepSeek / Kimi 等） |
+| 存储 | JSON 文件（抽象接口预留数据库扩展） |
+| 通信 | REST API + WebSocket |
 
 ## 常用命令
 
-### 后端
 ```bash
-cd backend
-source .venv/bin/activate         # 激活虚拟环境（Python 3.9）
-pip install -r requirements.txt
-playwright install chromium
-python main.py                    # 启动 FastAPI，端口 8000，热重载
-```
+# 后端
+cd backend && source .venv/bin/activate
+pip install -r requirements.txt && playwright install chromium
+python main.py                    # FastAPI :8000，热重载
 
-### 前端
-```bash
-cd frontend
-npm install
-npm run dev                       # Vite 开发服务器，端口 3000，/api 代理到 :8000
+# 前端
+cd frontend && npm install
+npm run dev                       # Vite :3000，/api 代理到 :8000
 npm run build                     # tsc -b && vite build
 npm run lint                      # eslint
-```
 
-### 测试
-```bash
-# 后端集成测试（需先启动后端）
+# 集成测试（需先启动后端）
 cd backend && python test_backend.py
 ```
 
 ## 架构
 
-### 后端（Python / FastAPI）
+### 后端
 
-- **入口**：`backend/main.py` — 创建 FastAPI 应用，注册 CORS 和所有路由
-- **配置**：`backend/config.py` — 单例配置加载器，读取 `settings.toml`，叠加 `settings.local.toml`（gitignored），环境变量可覆盖
-- **API 层**（`backend/api/`）：工作流 CRUD（`workflows.py`）、节点 Schema 查询（`actions.py`）、执行启停（`execution.py`）、WebSocket 端点（`websocket.py`）、AI 工作流生成（`ai_generate.py`）
-- **引擎**（`backend/engine/`）：
-  - `executor.py` — `WorkflowExecutor` 对工作流 DAG 做拓扑排序后顺序执行节点，管理 Playwright 浏览器生命周期
-  - `context.py` — `ExecutionContext` 持有单次执行的状态：浏览器/页面、变量、剪贴板、日志、截图，以及通过 `asyncio.Event` 实现的用户输入同步
-  - `actions/registry.py` — `ActionRegistry` 单例 + `@register_action` 装饰器；每个动作定义元数据（JSON Schema 参数、端口）和异步执行函数
-  - `actions/` — 按分类实现节点：`base.py`（start/end）、`browser.py`（open_tab、navigate、click、input_text、screenshot）、`data.py`（extract_text、剪贴板操作、set_variable）、`control.py`（wait、wait_for_element、user_input）
-- **存储层**（`backend/storage/`）：`StorageBase` 抽象基类 + `JSONFileStorage`（`file_storage.py`），将工作流和执行日志以 JSON 文件存储在 `data/` 目录下
-- **执行记录仓储**（`backend/repository/`）：`ExecutionRepository` 抽象基类 + `JSONExecutionRepository`，结构化节点执行记录持久化
+```
+backend/
+├── main.py                 # FastAPI 入口，注册 CORS 和所有路由
+├── config.py               # 单例配置加载器（settings.toml + settings.local.toml + 环境变量）
+├── api/
+│   ├── workflows.py        # 工作流 CRUD
+│   ├── actions.py          # 节点 Schema 查询 GET /api/actions
+│   ├── execution.py        # 执行启停 + WebSocket 端点
+│   ├── websocket.py        # ConnectionManager WebSocket 管理
+│   └── ai_generate.py      # POST /api/ai/generate-workflow 自然语言生成工作流
+├── engine/
+│   ├── executor.py          # WorkflowExecutor：DAG 拓扑排序 + 顺序执行
+│   ├── context.py           # ExecutionContext：单次执行的状态容器
+│   └── actions/
+│       ├── registry.py      # ActionRegistry + @register_action 装饰器
+│       ├── base.py          # start / end
+│       ├── browser.py       # open_tab / navigate / click / input_text / screenshot
+│       ├── data.py          # extract_text / clipboard / set_variable
+│       └── control.py       # wait / wait_for_element / user_input
+├── storage/                 # StorageBase 抽象 + JSONFileStorage
+└── repository/              # ExecutionRepository 抽象 + JSON 实现
+```
 
-### 前端（React + TypeScript + Vite）
+### 前端
 
-- **入口**：`frontend/src/main.tsx` → `App.tsx` — 三栏布局：工作流列表（左）、流程编辑器（中）、执行监控（右）
-- **FlowEditor**（`components/FlowEditor/`）：基于 `@xyflow/react`（ReactFlow），`nodes/` 下按分类实现自定义节点组件，`panels/NodePanel.tsx` 为属性面板，`panels/Toolbar.tsx` 为工具栏
-- **ExecutionPanel**（`components/ExecutionPanel/`）：展示实时截图、执行日志和用户输入提示
-- **WebSocket Hook**（`hooks/useWebSocket.ts`）：管理 WS 连接、消息分发、自动重连
-- **API 客户端**（`api/index.ts`）：axios 封装，工作流 CRUD 和 AI 生成接口
-- **路径别名**：`@` 映射到 `frontend/src/`（在 `vite.config.ts` 和 `tsconfig.app.json` 中配置）
-- **样式**：Tailwind CSS v4，通过 `@tailwindcss/vite` 插件集成
+```
+frontend/src/
+├── App.tsx                  # 三栏布局：工作流列表 / 编辑器 / 执行监控
+├── api/index.ts             # axios 封装
+├── hooks/useWebSocket.ts    # WebSocket 连接、消息分发、自动重连
+├── types/workflow.ts        # 全部 TypeScript 类型定义
+├── components/
+│   ├── FlowEditor/
+│   │   ├── index.tsx        # ReactFlow 画布 + 数据转换
+│   │   ├── nodes/           # 自定义节点组件（BaseNode + 5 种分类节点）
+│   │   └── panels/          # Toolbar（节点面板 + AI 编排）+ NodePanel（属性编辑）
+│   ├── ExecutionPanel/      # 实时截图 / 节点记录 / 日志 Tab
+│   └── WorkflowList/        # 工作流列表 CRUD
+```
 
 ### 数据流
 
-1. 用户在 FlowEditor 中创建/编辑工作流 → 通过 REST API 保存 → JSON 文件存储在 `data/workflows/`
-2. 用户点击执行 → REST 调用创建执行 → 前端通过 WebSocket 连接 `/api/ws/execution/{id}`
-3. 后端 `WorkflowExecutor` 启动 Playwright，按拓扑顺序执行节点，通过 WS 推送 `node_start`/`node_complete`/`screenshot`/`log` 消息
-4. 节点配置中可使用 `{{variable_name}}` 模板语法引用上游节点产生的变量
+1. 用户编辑工作流 → REST API 保存 → `data/workflows/*.json`
+2. 用户执行 → REST 创建执行 → WebSocket 连接 `/api/ws/execution/{id}`
+3. `WorkflowExecutor` 启动 Playwright → 拓扑排序 → 逐节点执行 → WS 推送状态/截图/日志
+4. 节点配置中 `{{variable_name}}` 模板语法引用上游变量
 
-### 添加新节点类型
+### 添加新节点
 
-1. 在 `backend/engine/actions/` 对应文件中创建异步函数
-2. 使用 `@register_action(name, label, description, category, parameters)` 装饰器，自动注册到全局 `ActionRegistry`
-3. 前端通过 `GET /api/actions` 自动发现可用节点并渲染到工具栏
-4. 如需特殊渲染，在 `frontend/src/components/FlowEditor/nodes/` 下添加自定义 React 节点组件
+1. 在 `backend/engine/actions/` 中创建 async 函数
+2. 用 `@register_action(name, label, description, category, parameters)` 装饰
+3. 前端通过 `GET /api/actions` 自动发现，渲染到工具栏
+4. 如需特殊 UI，在 `frontend/src/components/FlowEditor/nodes/` 添加自定义组件
+
+## 关键实现细节
+
+- `context.log()` 是异步方法，**必须 `await`**
+- WebSocket 后台任务使用 `asyncio.create_task()`，不要用 `BackgroundTasks`
+- 截图格式 JPEG，前端用 `data:image/jpeg;base64,`
+- `useWebSocket.ts` 中 `startExecution` 参数可能收到 React 事件对象，需做类型守卫
+- CDP 模式下复用已有页面不关闭，新建的页面才在 cleanup 时关闭
+- `@` 路径别名映射到 `frontend/src/`（vite.config.ts + tsconfig.app.json）
+
+## 配置
+
+```
+settings.toml            # 默认配置（提交到 git）
+settings.local.toml      # 本地覆盖（gitignored）
+```
+
+优先级：环境变量 > settings.local.toml > settings.toml
+
+关键配置项：
+- `[browser] cdp_url` — Chrome CDP 调试端口
+- `[llm] api_key / base_url / model / timeout` — LLM API 配置
 
 ## 分支管理
 
-每个版本使用独立的开发分支，完成后合并回 main：
-
-```bash
-# 开始新版本开发
-git checkout main
-git pull
-git checkout -b dev/v{版本号}    # 例如 dev/v0.2
-
-# 开发过程中按阶段提交
-git add . && git commit -m "feat: ..."
-
-# 版本完成后合并
-git checkout main
-git merge dev/v{版本号}
-git tag v{版本号}
 ```
+main                      # 发布分支
+dev/v{版本号}              # 版本开发分支（如 dev/v0.2）
+```
+
+开发完成后合并回 main，打 tag。
 
 ## 提交规范
 
@@ -106,20 +140,17 @@ git tag v{版本号}
 
 ## 提交前验证
 
-完成任务后必须执行以下验证，全部通过后方可提交：
-
 ```bash
-# 1. 后端语法检查（必须使用 venv Python）
+# 1. 后端语法检查
 cd backend && .venv/bin/python -c "
 import py_compile, glob
 for f in glob.glob('**/*.py', recursive=True):
-    if '.venv' in f:
-        continue
+    if '.venv' in f: continue
     py_compile.compile(f, doraise=True)
     print(f'OK: {f}')
 "
 
-# 2. 后端模块导入测试（必须使用 venv Python）
+# 2. 后端模块导入测试
 cd backend && .venv/bin/python -c "
 import sys; sys.path.insert(0,'.')
 from config import get_settings
@@ -137,8 +168,13 @@ cd frontend && npx tsc --noEmit
 cd frontend && npm run lint
 ```
 
-注意事项：
-- `context.log()` 是异步方法，所有调用必须使用 `await context.log(...)`
-- WebSocket 中启动后台任务使用 `asyncio.create_task()`，不要用 `BackgroundTasks`
-- 截图格式为 JPEG，前端渲染使用 `data:image/jpeg;base64,`
-- `useWebSocket.ts` 中 `startExecution` 的参数可能收到 React 事件对象，需做类型守卫
+## 当前版本状态
+
+- **已发布**：v0.1.0
+- **当前开发**：v0.2.x（`dev/v0.2` 分支）
+- **V0.2.2 已完成**：CDP 连接、双模式执行、结构化记录、AI 编排、venv 自动激活
+- **V0.2.3 计划**：修复 LLM 超时、AI 编排缺 start/end 节点、生成工作流执行报错、CDP 登录态
+- **V0.3 计划**：架构重构 + 功能补全 + 样式优化
+- **V0.4 待办**：测试体系搭建
+
+详细计划见 `docs/v0.2/v0.2.3/PLAN.md` 和 `docs/v0.3/PLAN.md`。
