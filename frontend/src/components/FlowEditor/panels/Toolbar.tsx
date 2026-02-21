@@ -189,6 +189,12 @@ export function Toolbar({ actions, hasNodes = false, onAIGenerate }: ToolbarProp
           节点工具栏
         </h3>
 
+        {!hasNodes && (
+          <div className="mb-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-blue-600">将节点拖拽到右侧画布中</p>
+          </div>
+        )}
+
         <div className="space-y-1">
           {sortedCategories.map((category) => {
             const isCollapsed = collapsed[category]

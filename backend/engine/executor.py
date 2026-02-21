@@ -1,9 +1,12 @@
 """工作流执行器 - 负责工作流的解析和执行。"""
 import asyncio
+import logging
 import uuid
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from fastapi import WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
@@ -79,6 +82,7 @@ class WorkflowExecutor:
     ) -> ExecutionContext:
         if execution_id is None:
             execution_id = str(uuid.uuid4())
+        logger.info(f"[{execution_id}] 开始执行工作流: workflow_id={workflow.get('id')}, headless={headless}")
         context = ExecutionContext(
             execution_id=execution_id,
             workflow_id=workflow["id"],
@@ -119,12 +123,14 @@ class WorkflowExecutor:
         workflow: Dict[str, Any],
         headless: bool = True
     ):
+        logger.info(f"[{context.execution_id}] 工作流开始运行")
         context.status = ExecutionStatus.RUNNING
         context.start_time = datetime.now()
 
         browser_mgr = BrowserManager()
         context._browser_mgr = browser_mgr
         await browser_mgr.connect(context, headless)
+        logger.info(f"[{context.execution_id}] 浏览器连接完成 (CDP模式: {getattr(context, '_is_cdp', False)})")
 
         execution_order = topological_sort(
             workflow.get("nodes", []),
@@ -132,6 +138,7 @@ class WorkflowExecutor:
         )
 
         nodes_map = {node["id"]: node for node in workflow.get("nodes", [])}
+        logger.info(f"[{context.execution_id}] 执行顺序: {execution_order}")
 
         if context.websocket:
             await context.websocket.send_json({
@@ -145,6 +152,8 @@ class WorkflowExecutor:
 
         for node_id in execution_order:
             if context.status == ExecutionStatus.CANCELLED:
+                logger.info(f"[{context.execution_id}] 工作流被取消，停止执行后续节点")
+                await context.log("info", "工作流被取消")
                 break
 
             node = nodes_map.get(node_id)
@@ -156,6 +165,7 @@ class WorkflowExecutor:
             node_label = node.get("label", node_type)
 
             context.current_node_id = node_id
+            logger.info(f"[{context.execution_id}] 节点开始: {node_id} (type={node_type}, label={node_label})")
 
             record = recorder.start_node(node_id, node_type, node_label)
             context.node_records[node_id] = record
@@ -176,6 +186,7 @@ class WorkflowExecutor:
 
             try:
                 result = await execute_func(context, resolved_config)
+                logger.info(f"[{context.execution_id}] 节点成功: {node_id}")
 
                 recorder.complete_node(record, result, context.logs)
 
@@ -192,6 +203,7 @@ class WorkflowExecutor:
 
             except Exception as e:
                 recorder.fail_node(record, str(e), context.logs)
+                logger.error(f"[{context.execution_id}] 节点失败: {node_id}, 错误: {e}", exc_info=True)
 
                 if context.websocket:
                     await context.websocket.send_json({
@@ -204,8 +216,14 @@ class WorkflowExecutor:
                 await context.log("error", f"节点 {node_id} 执行失败: {str(e)}")
                 raise
 
+        if context.status == ExecutionStatus.CANCELLED:
+            logger.info(f"[{context.execution_id}] 工作流已取消，跳过完成消息")
+            return
+
         context.status = ExecutionStatus.COMPLETED
         context.end_time = datetime.now()
+        duration = (context.end_time - context.start_time).total_seconds()
+        logger.info(f"[{context.execution_id}] 工作流完成, 耗时: {duration:.2f}秒")
 
         if context.websocket:
             await context.websocket.send_json({
@@ -231,20 +249,31 @@ class WorkflowExecutor:
                 del self.active_executions[context.execution_id]
 
     async def stop(self, execution_id: str):
+        logger.info(f"[{execution_id}] 收到停止请求")
         async with self._get_lock():
             context = self.active_executions.get(execution_id)
             if context:
                 context.status = ExecutionStatus.CANCELLED
+                logger.info(f"[{execution_id}] 状态已设置为 CANCELLED")
+                
+                browser_mgr = getattr(context, '_browser_mgr', None)
+                if browser_mgr:
+                    logger.info(f"[{execution_id}] 立即清理浏览器资源")
+                    await browser_mgr.cleanup(context)
+                
                 if context.websocket:
                     try:
                         await context.websocket.send_json({
                             "type": WSMessageType.EXECUTION_CANCELLED.value,
                             "execution_id": execution_id
                         })
+                        logger.info(f"[{execution_id}] 已发送 EXECUTION_CANCELLED 消息")
                     except ConnectionClosed:
                         await context.log("debug", "WebSocket连接已关闭，无法发送取消消息")
                     except WebSocketDisconnect:
                         await context.log("debug", "WebSocket已断开，无法发送取消消息")
+            else:
+                logger.warning(f"[{execution_id}] 未找到活跃的执行上下文")
 
     async def respond_user_input(self, execution_id: str, response: str):
         context = self.active_executions.get(execution_id)

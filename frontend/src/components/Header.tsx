@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { useExecutionStore } from '@/stores/executionStore'
 import { toast } from '@/stores/uiStore'
@@ -8,11 +8,11 @@ import type { Workflow } from '@/types/workflow'
 import { 
   Play, 
   Square, 
-  Check, 
   RefreshCw, 
   PanelRight, 
   Menu,
-  Workflow as WorkflowIcon
+  Workflow as WorkflowIcon,
+  Info
 } from 'lucide-react'
 
 type ExecutionStatus = 'idle' | 'running' | 'success' | 'error'
@@ -120,10 +120,9 @@ function ExecuteButton({
           onClick={onStop}
           variant="secondary"
           size="sm"
-          loading
           icon={<Square className="w-4 h-4" />}
         >
-          执行中...
+          停止
         </Button>
       )
     case 'success':
@@ -132,10 +131,9 @@ function ExecuteButton({
           onClick={onExecute}
           variant="primary"
           size="sm"
-          icon={<Check className="w-4 h-4" />}
-          className="bg-emerald-500 hover:bg-emerald-600 focus:ring-emerald-400"
+          icon={<Play className="w-4 h-4" />}
         >
-          完成
+          再次运行
         </Button>
       )
     case 'error':
@@ -173,16 +171,25 @@ export function Header({
 }: HeaderProps) {
   const { currentWorkflow } = useWorkflowStore()
   const { executionState, executionMode, setExecutionMode } = useExecutionStore()
+  const lastExecutionIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (executionState.executionId) {
+      lastExecutionIdRef.current = executionState.executionId
+    }
+  }, [executionState.executionId])
 
   const hasFailedNodes = Object.values(executionState.nodeStatuses).some((s) => s === 'failed')
   const hasCompletedNodes = Object.values(executionState.nodeStatuses).some((s) => s === 'completed')
+  // eslint-disable-next-line react-hooks/refs
+  const isCurrentExecution = executionState.executionId !== null && executionState.executionId === lastExecutionIdRef.current
 
   let executionStatus: ExecutionStatus = 'idle'
   if (executionState.isRunning) {
     executionStatus = 'running'
-  } else if (hasFailedNodes) {
+  } else if (isCurrentExecution && hasFailedNodes) {
     executionStatus = 'error'
-  } else if (hasCompletedNodes) {
+  } else if (isCurrentExecution && hasCompletedNodes) {
     executionStatus = 'success'
   }
 
@@ -194,27 +201,36 @@ function ExecutionModeToggle({
   onChange: (mode: ExecutionMode) => void 
 }) {
   return (
-    <div className="flex items-center bg-neutral-100 rounded-md p-0.5 border border-neutral-200">
-      <button
-        onClick={() => onChange('headless')}
-        className={`px-2.5 py-1 text-xs font-medium rounded transition-all ${
-          mode === 'headless'
-            ? 'bg-white text-neutral-900 shadow-sm'
-            : 'text-neutral-500 hover:text-neutral-700'
-        }`}
-      >
-        后台
-      </button>
-      <button
-        onClick={() => onChange('headed')}
-        className={`px-2.5 py-1 text-xs font-medium rounded transition-all ${
-          mode === 'headed'
-            ? 'bg-white text-neutral-900 shadow-sm'
-            : 'text-neutral-500 hover:text-neutral-700'
-        }`}
-      >
-        前台
-      </button>
+    <div className="flex items-center gap-1">
+      <div className="flex items-center bg-neutral-100 rounded-md p-0.5 border border-neutral-200">
+        <button
+          onClick={() => onChange('headless')}
+          className={`px-2.5 py-1 text-xs font-medium rounded transition-all ${
+            mode === 'headless'
+              ? 'bg-white text-neutral-900 shadow-sm'
+              : 'text-neutral-500 hover:text-neutral-700'
+          }`}
+        >
+          后台
+        </button>
+        <button
+          onClick={() => onChange('headed')}
+          className={`px-2.5 py-1 text-xs font-medium rounded transition-all ${
+            mode === 'headed'
+              ? 'bg-white text-neutral-900 shadow-sm'
+              : 'text-neutral-500 hover:text-neutral-700'
+          }`}
+        >
+          前台
+        </button>
+      </div>
+      <div className="relative group">
+        <Info className="w-3.5 h-3.5 text-neutral-400 cursor-help" />
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1.5 bg-neutral-800 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+          <div className="mb-1"><span className="font-medium">后台模式：</span>无界面运行</div>
+          <div><span className="font-medium">前台模式：</span>显示浏览器窗口</div>
+        </div>
+      </div>
     </div>
   )
 }

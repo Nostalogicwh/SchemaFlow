@@ -37,6 +37,7 @@ export interface JsonSchemaProperty {
 export interface WorkflowNode {
   id: string
   type: string
+  label?: string
   config: Record<string, unknown>
   position?: { x: number; y: number }
   meta?: {

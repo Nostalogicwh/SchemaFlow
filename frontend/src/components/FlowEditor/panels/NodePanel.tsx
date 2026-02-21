@@ -19,9 +19,10 @@ interface NodePanelProps {
   selectedNode: Node | null
   actionMetadata: ActionMetadata[]
   onUpdateNode: (nodeId: string, config: Record<string, unknown>) => void
+  onUpdateNodeLabel: (nodeId: string, label: string) => void
 }
 
-export function NodePanel({ selectedNode, actionMetadata, onUpdateNode }: NodePanelProps) {
+export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdateNodeLabel }: NodePanelProps) {
   // 获取当前节点的元数据
   const metadata = actionMetadata.find(a => a.name === selectedNode?.type)
 
@@ -92,6 +93,18 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode }: NodePa
           )}
         </div>
         <p className="text-sm text-neutral-500">{metadata.description}</p>
+      </div>
+
+      {/* 节点名称编辑 */}
+      <div className="mb-4">
+        <FormField label="节点名称" helpText="自定义节点显示名称">
+          <Input
+            type="text"
+            value={nodeData?.label || ''}
+            onChange={(e) => onUpdateNodeLabel(selectedNode.id, e.target.value)}
+            placeholder={metadata.label}
+          />
+        </FormField>
       </div>
 
       {/* 参数表单 */}

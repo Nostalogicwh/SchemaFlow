@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { toast } from '@/stores/uiStore'
 import {
   ReactFlow,
   Background,
@@ -45,7 +46,7 @@ function workflowToFlow(workflow: Workflow): { nodes: FlowNode[]; edges: Edge[] 
     type: node.type,
     position: node.position ?? { x: 100 + index * 200, y: 100 + (index % 2) * 100 },
     data: {
-      label: node.type,
+      label: node.label || node.type,
       category: nodeCategoryMap[node.type] || 'base',
       config: node.config,
       status: 'idle' as NodeStatus,
@@ -70,6 +71,7 @@ function flowToWorkflow(
   const workflowNodes: WorkflowNode[] = nodes.map((node) => ({
     id: node.id,
     type: node.type!,
+    label: node.data.label,
     config: node.data.config || {},
     position: { x: node.position.x, y: node.position.y },
   }))
@@ -168,6 +170,24 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
     [setNodes]
   )
 
+  const handleUpdateNodeLabel = useCallback(
+    (nodeId: string, label: string) => {
+      setNodes((nds) =>
+        nds.map((node) =>
+          node.id === nodeId
+            ? { ...node, data: { ...node.data, label } }
+            : node
+        )
+      )
+      setSelectedNode((prev) =>
+        prev?.id === nodeId
+          ? { ...prev, data: { ...prev.data, label } }
+          : prev
+      )
+    },
+    [setNodes]
+  )
+
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
@@ -240,6 +260,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
     if (!workflow || !onSave) return
     const updatedWorkflow = flowToWorkflow(nodes, edges, workflow)
     onSave(updatedWorkflow)
+    toast.success('工作流已保存')
   }, [workflow, nodes, edges, onSave])
 
   return (
@@ -292,6 +313,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
               selectedNode={selectedNode}
               actionMetadata={actions}
               onUpdateNode={handleUpdateNode}
+              onUpdateNodeLabel={handleUpdateNodeLabel}
             />
           </>
         )}

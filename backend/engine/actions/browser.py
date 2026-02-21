@@ -45,14 +45,18 @@ async def open_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
     if context.page is None:
         # 如果页面不存在，需要创建（这种情况较少）
         if is_cdp and context.browser:
-            # CDP 模式下尝试复用已有页面
+            # CDP 模式下尝试复用已有页面或在现有 context 中创建新页面
             default_context = context.browser.contexts[0] if context.browser.contexts else None
             if default_context and default_context.pages:
                 context.page = default_context.pages[0]
                 await context.log("info", f"复用已有页面: {context.page.url}")
+            elif default_context:
+                # 在现有 context 中创建新页面，保持登录态
+                context.page = await default_context.new_page()
+                await context.log("info", "在现有 context 中创建新页面（保持登录态）")
             else:
                 context.page = await context.browser.new_page()
-                await context.log("info", "创建新页面")
+                await context.log("warn", "创建新页面（无现有 context，可能丢失登录态）")
         else:
             context.page = await context.browser.new_page()
             await context.log("info", "创建新页面")

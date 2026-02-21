@@ -1,5 +1,6 @@
 """执行上下文 - 管理单个工作流执行周期的状态。"""
 import asyncio
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -12,6 +13,8 @@ from websockets.exceptions import ConnectionClosed
 from openai import AuthenticationError, APIError, OpenAIError, AsyncOpenAI
 
 from .constants import NodeStatus, WSMessageType
+
+logger = logging.getLogger(__name__)
 
 
 # LLM客户端单例
@@ -226,6 +229,15 @@ class ExecutionContext:
             "node_id": self.current_node_id
         }
         self.logs.append(log_entry)
+
+        # 本地日志记录
+        log_msg = f"[{self.execution_id}] {message}"
+        if level == "error":
+            logger.error(log_msg)
+        elif level == "warning":
+            logger.warning(log_msg)
+        else:
+            logger.info(log_msg)
 
         if self.websocket:
             try:
