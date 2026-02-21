@@ -114,9 +114,11 @@ async def call_llm(system_prompt: str, user_prompt: str, model: str = None) -> s
     if not api_key:
         raise ValueError("未配置 LLM API Key（设置 LLM_API_KEY 环境变量或 settings.toml）")
 
-    logger.info("调用 LLM - base_url: %s, model: %s", base_url, model)
+    logger.info("调用 LLM - base_url: %s, model: %s, timeout: %ss", base_url, model, timeout)
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    # 设置超时：连接5秒，读取使用配置的超时时间
+    httpx_timeout = httpx.Timeout(timeout, connect=5.0)
+    async with httpx.AsyncClient(timeout=httpx_timeout) as client:
         response = await client.post(
             f"{base_url}/chat/completions",
             headers={
