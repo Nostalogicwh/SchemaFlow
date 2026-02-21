@@ -2,37 +2,7 @@
 import base64
 from typing import Dict, Any
 from ..actions import register_action
-
-
-async def _locate_by_ai_target(page, ai_target: str, context=None):
-    """通过语义描述定位元素，按优先级尝试多种策略。
-
-    Args:
-        page: Playwright 页面实例
-        ai_target: 用户描述的目标元素（如"登录按钮"、"搜索框"）
-        context: 执行上下文（用于日志）
-
-    Returns:
-        定位到的 Locator
-    """
-    strategies = [
-        ("get_by_role('button')", lambda: page.get_by_role("button", name=ai_target)),
-        ("get_by_role('link')", lambda: page.get_by_role("link", name=ai_target)),
-        ("get_by_text", lambda: page.get_by_text(ai_target, exact=False)),
-        ("get_by_placeholder", lambda: page.get_by_placeholder(ai_target)),
-        ("get_by_label", lambda: page.get_by_label(ai_target)),
-        ("aria-label", lambda: page.locator(f"[aria-label*='{ai_target}']")),
-        ("title", lambda: page.locator(f"[title*='{ai_target}']")),
-    ]
-
-    for name, get_locator in strategies:
-        locator = get_locator()
-        count = await locator.count()
-        if count > 0:
-            if context:
-                await context.log("info", f"AI 定位成功 [{name}]: {ai_target} (匹配 {count} 个)")
-            return locator.first
-    raise ValueError(f"AI 定位失败: 未找到匹配「{ai_target}」的元素")
+from .utils import locate_element
 
 
 @register_action(
@@ -70,7 +40,6 @@ async def open_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
     await context.log("info", f"打开标签页: {url}")
 
     if context.page is None:
-        # 如果没有页面，创建新页面
         context.page = await context.browser.new_page()
 
     await context.page.goto(url, wait_until="domcontentloaded")
@@ -149,15 +118,14 @@ async def click_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     selector = config.get("selector")
     ai_target = config.get("ai_target")
 
-    if selector:
-        await context.log("info", f"点击元素: {selector}")
-        await context.page.click(selector, timeout=30000)
-    elif ai_target:
-        await context.log("info", f"AI 点击: {ai_target}")
-        locator = await _locate_by_ai_target(context.page, ai_target, context)
-        await locator.click(timeout=30000)
-    else:
+    if not selector and not ai_target:
         raise ValueError("click 节点需要 selector 或 ai_target 参数")
+
+    target_desc = selector or ai_target
+    await context.log("info", f"点击元素: {target_desc}")
+
+    locator = await locate_element(context.page, selector, ai_target, context)
+    await locator.click(timeout=30000)
 
     return {}
 
@@ -217,17 +185,13 @@ async def input_text_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
     if not selector and not ai_target:
         raise ValueError("input_text 节点需要 selector 或 ai_target 参数")
 
-    if selector:
-        await context.log("info", f"输入文本到 {selector}: {value[:50]}...")
-        if clear_before:
-            await context.page.fill(selector, "")
-        await context.page.type(selector, value)
-    else:
-        await context.log("info", f"AI 输入到 {ai_target}: {value[:50]}...")
-        locator = await _locate_by_ai_target(context.page, ai_target, context)
-        if clear_before:
-            await locator.fill("")
-        await locator.type(value)
+    target_desc = selector or ai_target
+    await context.log("info", f"输入文本到 {target_desc}: {value[:50]}...")
+
+    locator = await locate_element(context.page, selector, ai_target, context)
+    if clear_before:
+        await locator.fill("")
+    await locator.type(value)
 
     if press_enter:
         await context.page.keyboard.press("Enter")
@@ -269,7 +233,6 @@ async def screenshot_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
     screenshot_bytes = await context.page.screenshot(type="jpeg", quality=60)
     base64_data = base64.b64encode(screenshot_bytes).decode()
 
-    # 如果有 filename，保存到文件
     if filename:
         import os
         save_dir = context.data_dir / "screenshots"

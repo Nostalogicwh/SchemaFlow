@@ -1,6 +1,5 @@
 """工作流执行器 - 负责工作流的解析和执行。"""
 import asyncio
-import re
 import uuid
 from typing import Dict, Any, Optional, List
 from datetime import datetime
@@ -9,6 +8,7 @@ from pathlib import Path
 from .context import ExecutionContext, ExecutionStatus
 from .constants import WSMessageType
 from .actions import registry
+from .actions.utils import resolve_variables
 from .browser_manager import BrowserManager
 from .execution_recorder import ExecutionRecorder
 
@@ -167,7 +167,7 @@ class WorkflowExecutor:
             except ValueError:
                 raise ValueError(f"未知的节点类型: {node_type}")
 
-            resolved_config = self._resolve_variables(config, context.variables)
+            resolved_config = resolve_variables(config, context.variables)
 
             try:
                 result = await execute_func(context, resolved_config)
@@ -213,28 +213,6 @@ class WorkflowExecutor:
 
         recorder.sync_to_context(context)
         await recorder.save(context, workflow)
-
-    def _resolve_variables(self, config: Any, variables: Dict[str, Any]) -> Any:
-        def resolve_value(value):
-            if isinstance(value, str):
-                pattern = r'\{\{(\w+)\}\}'
-                matches = list(re.finditer(pattern, value))
-
-                if matches:
-                    result = value
-                    for match in reversed(matches):
-                        var_name = match.group(1)
-                        var_value = str(variables.get(var_name, match.group(0)))
-                        result = result[:match.start()] + var_value + result[match.end():]
-                    return result
-                return value
-            elif isinstance(value, dict):
-                return {k: resolve_value(v) for k, v in value.items()}
-            elif isinstance(value, list):
-                return [resolve_value(v) for v in value]
-            return value
-
-        return resolve_value(config)
 
     async def _cleanup(self, context: ExecutionContext):
         context.end_time = datetime.now()

@@ -1,6 +1,7 @@
 """数据操作节点 - 提取、复制、粘贴等。"""
 from typing import Dict, Any
 from ..actions import register_action
+from .utils import resolve_variables
 
 
 @register_action(
@@ -46,7 +47,6 @@ async def extract_text_action(context: Any, config: Dict[str, Any]) -> Dict[str,
     else:
         text = ""
 
-    # 保存到变量
     context.variables[output_var] = text
     context.clipboard = text
 
@@ -84,11 +84,7 @@ async def copy_to_clipboard_action(context: Any, config: Dict[str, Any]) -> Dict
         执行结果
     """
     value = config.get("value", "")
-
-    # 解析变量引用
-    if value.startswith("{{") and value.endswith("}}"):
-        var_name = value[2:-2]
-        value = str(context.variables.get(var_name, ""))
+    value = resolve_variables(value, context.variables)
 
     context.clipboard = value
     await context.log("info", f"复制到剪贴板: {value[:50]}...")
@@ -131,7 +127,6 @@ async def paste_from_clipboard_action(context: Any, config: Dict[str, Any]) -> D
 
     await context.page.fill(selector, "")
 
-    # 模拟粘贴（Playwright 的 paste 需要聚焦后）
     element = await context.page.query_selector(selector)
     if element:
         await element.fill(text)
