@@ -1,0 +1,131 @@
+"""AI 工作流生成 API - 基于自然语言描述生成工作流节点和连线。"""
+import json
+import os
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+import httpx
+
+from engine.actions import registry
+
+router = APIRouter(prefix="/api/ai", tags=["ai"])
+
+
+class GenerateRequest(BaseModel):
+    """工作流生成请求。"""
+    prompt: str                          # 自然语言描述
+    model: str = "deepseek-chat"         # 使用的模型
+    existing_nodes: Optional[List[Dict[str, Any]]] = None  # 已有节点（用于追加编排）
+
+
+class GenerateResponse(BaseModel):
+    """工作流生成响应。"""
+    nodes: List[Dict[str, Any]]          # 生成的节点列表
+    edges: List[Dict[str, Any]]          # 生成的连线列表
+
+
+def build_system_prompt(action_schemas: List[Dict[str, Any]]) -> str:
+    """构造 system prompt，包含所有可用节点的描述和参数。"""
+    return f"""你是一个工作流编排助手。根据用户的自然语言描述，生成工作流的节点列表和连线关系。
+
+可用节点类型（JSON Schema 格式）：
+{json.dumps(action_schemas, ensure_ascii=False, indent=2)}
+
+规则：
+1. 每个节点必须有唯一的 id（格式：node_类型_序号，如 node_navigate_1）
+2. 节点的 config 必须符合该节点 parameters 中定义的字段
+3. 连线的 source 和 target 必须是已定义的节点 id
+4. 节点按执行顺序排列，连线表示执行依赖
+5. 不要生成 start 和 end 节点，系统会自动添加
+6. config 中的值如果需要引用上游节点的变量，使用 {{{{variable_name}}}} 语法
+
+输出严格的 JSON 格式（不要包含 markdown 代码块标记）：
+{{
+  "nodes": [
+    {{ "id": "node_xxx_1", "type": "action_name", "label": "节点显示名称", "config": {{...}} }}
+  ],
+  "edges": [
+    {{ "source": "node_xxx_1", "target": "node_xxx_2" }}
+  ]
+}}"""
+
+
+@router.post("/generate-workflow", response_model=GenerateResponse)
+async def generate_workflow(request: GenerateRequest):
+    """根据自然语言描述生成工作流。
+
+    Args:
+        request: 生成请求
+
+    Returns:
+        生成的节点和连线
+    """
+    # 获取所有可用 action 的 schema
+    action_schemas = registry.get_all_schemas()
+    if not action_schemas:
+        raise HTTPException(status_code=500, detail="没有可用的节点类型")
+
+    system_prompt = build_system_prompt(action_schemas)
+
+    # 调用大模型
+    try:
+        result = await call_llm(system_prompt, request.prompt, request.model)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"调用大模型失败: {e}")
+
+    # 解析响应
+    try:
+        workflow_data = parse_llm_response(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"解析生成结果失败: {e}")
+
+    return GenerateResponse(
+        nodes=workflow_data.get("nodes", []),
+        edges=workflow_data.get("edges", []),
+    )
+
+
+async def call_llm(system_prompt: str, user_prompt: str, model: str = "deepseek-chat") -> str:
+    """调用大模型 API（兼容 OpenAI 格式）。
+
+    通过环境变量配置：
+    - LLM_API_KEY: API 密钥
+    - LLM_BASE_URL: API 基础地址（默认 DeepSeek）
+    """
+    api_key = os.environ.get("LLM_API_KEY", "")
+    base_url = os.environ.get("LLM_BASE_URL", "https://api.deepseek.com/v1")
+
+    if not api_key:
+        raise ValueError("未配置 LLM_API_KEY 环境变量")
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        response = await client.post(
+            f"{base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": 0.1,
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
+
+
+def parse_llm_response(content: str) -> Dict[str, Any]:
+    """解析大模型返回的 JSON 内容。"""
+    # 去除可能的 markdown 代码块标记
+    text = content.strip()
+    if text.startswith("```"):
+        # 移除首行 ```json 和末尾 ```
+        lines = text.split("\n")
+        text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+
+    return json.loads(text)

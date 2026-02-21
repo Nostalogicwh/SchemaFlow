@@ -9,6 +9,7 @@ browser-use==0.1.0
 
 # AI
 openai==1.10.0
+httpx==0.27.0
 
 # Data
 pydantic==2.5.0

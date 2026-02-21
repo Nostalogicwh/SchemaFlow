@@ -202,6 +202,40 @@ export function FlowEditor({ workflow, nodeStatuses = {}, onSave }: FlowEditorPr
     [setNodes]
   )
 
+  // AI 编排：将生成的节点和连线添加到画布
+  const handleAIGenerate = useCallback(
+    (
+      aiNodes: { id: string; type: string; label?: string; config: Record<string, unknown> }[],
+      aiEdges: { source: string; target: string }[]
+    ) => {
+      // 将 AI 生成的节点转为 FlowNode，纵向自动布局
+      const startY = 100
+      const gapY = 120
+      const newNodes: FlowNode[] = aiNodes.map((n, i) => ({
+        id: n.id,
+        type: n.type,
+        position: { x: 300, y: startY + i * gapY },
+        data: {
+          label: n.label || n.type,
+          category: nodeCategoryMap[n.type] || 'base',
+          config: n.config || {},
+          status: 'idle' as NodeStatus,
+        },
+      }))
+
+      const newEdges: Edge[] = aiEdges.map((e, i) => ({
+        id: `ai_e${Date.now()}_${i}`,
+        source: e.source,
+        target: e.target,
+      }))
+
+      setNodes((nds) => [...nds, ...newNodes])
+      setEdges((eds) => [...eds, ...newEdges])
+      nodeIdCounter.current += aiNodes.length
+    },
+    [setNodes, setEdges]
+  )
+
   // 保存工作流
   const handleSave = useCallback(() => {
     if (!workflow || !onSave) return
@@ -213,7 +247,7 @@ export function FlowEditor({ workflow, nodeStatuses = {}, onSave }: FlowEditorPr
     <div className="flex h-full">
       {/* 左侧工具栏 */}
       <div className="w-48 border-r bg-white">
-        <Toolbar actions={actions} />
+        <Toolbar actions={actions} onAIGenerate={handleAIGenerate} />
       </div>
 
       {/* 中间画布 */}

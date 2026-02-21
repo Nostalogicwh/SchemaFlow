@@ -8,10 +8,10 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent))
 
 # 导入 API 路由
-from api import workflows, actions, execution
+from api import workflows, actions, execution, ai_generate
 
 # 导入动作节点以触发注册
-from engine.actions import base, browser, data, control, ai
+from engine.actions import base, browser, data, control
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -33,6 +33,7 @@ app.add_middleware(
 app.include_router(workflows.router)
 app.include_router(actions.router)
 app.include_router(execution.router)
+app.include_router(ai_generate.router)
 
 
 @app.get("/")
