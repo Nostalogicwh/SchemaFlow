@@ -75,7 +75,7 @@ export const actionApi = {
 export const aiApi = {
   // 根据自然语言描述生成工作流节点和连线
   generateWorkflow: async (prompt: string): Promise<{ nodes: WorkflowNode[]; edges: WorkflowEdge[] }> => {
-    const { data } = await api.post('/ai/generate-workflow', { prompt }, { timeout: 120000 })
+    const { data } = await api.post('/ai/generate-workflow', { prompt }, { timeout: 600000 })
     return data
   },
 }

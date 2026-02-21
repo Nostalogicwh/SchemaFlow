@@ -109,7 +109,7 @@ async def call_llm(system_prompt: str, user_prompt: str, model: str = None) -> s
     base_url = llm_cfg.get("base_url", "https://api.deepseek.com/v1")
     model = model or llm_cfg.get("model", "deepseek-chat")
     temperature = llm_cfg.get("temperature", 0.1)
-    timeout = llm_cfg.get("timeout", 120)
+    timeout = llm_cfg.get("timeout", 600)
 
     if not api_key:
         raise ValueError("未配置 LLM API Key（设置 LLM_API_KEY 环境变量或 settings.toml）")
