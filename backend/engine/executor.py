@@ -138,11 +138,25 @@ class WorkflowExecutor:
             self.playwright = await async_playwright().start()
             try:
                 # 优先通过 CDP 连接用户本地浏览器，保留登录态
-                cdp_url = "http://localhost:9222"
+                from config import get_settings
+                cdp_url = get_settings()["browser"]["cdp_url"]
                 context.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
                 # CDP 连接返回的 Browser 至少有一个默认 context
                 default_context = context.browser.contexts[0]
-                context.page = await default_context.new_page()
+                # 优先复用已有的非空白页面，保留 sessionStorage 等登录态
+                existing_pages = default_context.pages
+                reused = None
+                for p in existing_pages:
+                    if p.url and p.url != "about:blank":
+                        reused = p
+                        break
+                if reused:
+                    context.page = reused
+                    context._reused_page = True
+                    await context.log("info", f"已复用已有页面: {reused.url}")
+                else:
+                    context.page = await default_context.new_page()
+                    context._reused_page = False
                 context._is_cdp = True
                 await context.log("info", "已连接本地浏览器（CDP 模式）")
             except Exception:
@@ -335,15 +349,17 @@ class WorkflowExecutor:
         """
         context.end_time = datetime.now()
 
-        # CDP 模式：只关闭页面，不关闭浏览器（浏览器属于用户）
+        # CDP 模式：复用的页面不关闭，新建的页面才关闭
         # 独立模式：关闭整个 playwright 进程
         is_cdp = getattr(context, '_is_cdp', False)
+        reused = getattr(context, '_reused_page', False)
         if is_cdp:
-            try:
-                if context.page and not context.page.is_closed():
-                    await context.page.close()
-            except Exception:
-                pass
+            if not reused:
+                try:
+                    if context.page and not context.page.is_closed():
+                        await context.page.close()
+                except Exception:
+                    pass
         elif hasattr(self, 'playwright'):
             try:
                 await self.playwright.stop()

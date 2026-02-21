@@ -54,10 +54,12 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
+    from config import get_settings
 
+    server_cfg = get_settings()["server"]
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,
+        host=server_cfg["host"],
+        port=server_cfg["port"],
         reload=True
     )

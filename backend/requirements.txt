@@ -17,3 +17,4 @@ aiofiles==23.2.1
 
 # Utils
 python-dotenv==1.0.0
+tomli==2.0.1           # TOML 解析（Python < 3.11）

@@ -1,12 +1,12 @@
 """AI 工作流生成 API - 基于自然语言描述生成工作流节点和连线。"""
 import json
-import os
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import httpx
 
 from engine.actions import registry
+from config import get_settings
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -85,20 +85,22 @@ async def generate_workflow(request: GenerateRequest):
     )
 
 
-async def call_llm(system_prompt: str, user_prompt: str, model: str = "deepseek-chat") -> str:
+async def call_llm(system_prompt: str, user_prompt: str, model: str = None) -> str:
     """调用大模型 API（兼容 OpenAI 格式）。
 
-    通过环境变量配置：
-    - LLM_API_KEY: API 密钥
-    - LLM_BASE_URL: API 基础地址（默认 DeepSeek）
+    配置优先级：settings.toml < settings.local.toml < 环境变量
     """
-    api_key = os.environ.get("LLM_API_KEY", "")
-    base_url = os.environ.get("LLM_BASE_URL", "https://api.deepseek.com/v1")
+    llm_cfg = get_settings()["llm"]
+    api_key = llm_cfg.get("api_key", "")
+    base_url = llm_cfg.get("base_url", "https://api.deepseek.com/v1")
+    model = model or llm_cfg.get("model", "deepseek-chat")
+    temperature = llm_cfg.get("temperature", 0.1)
+    timeout = llm_cfg.get("timeout", 60)
 
     if not api_key:
-        raise ValueError("未配置 LLM_API_KEY 环境变量")
+        raise ValueError("未配置 LLM API Key（设置 LLM_API_KEY 环境变量或 settings.toml）")
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
             f"{base_url}/chat/completions",
             headers={
@@ -111,7 +113,7 @@ async def call_llm(system_prompt: str, user_prompt: str, model: str = "deepseek-
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                "temperature": 0.1,
+                "temperature": temperature,
             },
         )
         response.raise_for_status()
