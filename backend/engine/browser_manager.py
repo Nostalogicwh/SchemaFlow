@@ -27,19 +27,35 @@ class BrowserManager:
         Returns:
             (is_cdp, reused_page) - 是否 CDP 模式和是否复用页面
         """
+        await context.log("debug", f"BrowserManager.connect() 开始 - browser存在: {context.browser is not None}, page存在: {context.page is not None}")
+
         if context.browser is not None and context.page is None:
+            # browser存在但page被关闭，需要创建新页面
+            is_cdp = getattr(context, '_is_cdp', False)
+            await context.log("info", f"Browser已连接，创建新页面（CDP模式: {is_cdp}）")
             context.page = await context.browser.new_page()
-            return False, False
+            self._is_cdp = is_cdp
+            self._reused_page = False
+            context._reused_page = False
+            await context.log("debug", f"新页面创建成功，返回状态: is_cdp={is_cdp}, reused_page=False")
+            return is_cdp, False
 
         if context.browser is not None or context.page is not None:
-            return getattr(context, '_is_cdp', False), getattr(context, '_reused_page', False)
+            is_cdp = getattr(context, '_is_cdp', False)
+            reused_page = getattr(context, '_reused_page', False)
+            await context.log("debug", f"浏览器已连接，复用现有状态: is_cdp={is_cdp}, reused_page={reused_page}")
+            self._is_cdp = is_cdp
+            self._reused_page = reused_page
+            return is_cdp, reused_page
 
         from playwright.async_api import async_playwright
+        await context.log("debug", "启动 Playwright，尝试 CDP 连接...")
         self.playwright = await async_playwright().start()
 
         try:
             from config import get_settings
             cdp_url = get_settings()["browser"]["cdp_url"]
+            await context.log("debug", f"尝试连接 CDP: {cdp_url}")
             context.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
             default_context = context.browser.contexts[0]
             await context.log("info", f"CDP 连接成功，contexts 数量: {len(context.browser.contexts)}")
@@ -63,20 +79,22 @@ class BrowserManager:
                 context.page = await default_context.new_page()
                 self._reused_page = False
                 context._reused_page = False
+                await context.log("info", "已创建新页面（在 CDP 模式下）")
 
             self._is_cdp = True
             context._is_cdp = True
-            await context.log("info", "已连接本地浏览器（CDP 模式）")
+            await context.log("info", f"已连接本地浏览器（CDP 模式），reused_page={self._reused_page}")
             return True, self._reused_page
 
         except Exception as e:
+            await context.log("warn", f"CDP 连接失败: {e}")
             context.browser = await self.playwright.chromium.launch(headless=headless)
             context.page = await context.browser.new_page()
             self._is_cdp = False
             context._is_cdp = False
             self._reused_page = False
             context._reused_page = False
-            await context.log("warn", f"未检测到本地浏览器调试端口，已启动独立浏览器（无登录态）: {e}")
+            await context.log("warn", f"已启动独立浏览器（无登录态）")
             return False, False
 
     async def cleanup(self, context):
@@ -85,18 +103,28 @@ class BrowserManager:
         CDP 模式：复用的页面不关闭，新建的页面才关闭
         独立模式：关闭整个 playwright 进程
         """
+        await context.log("debug", f"BrowserManager.cleanup() 开始 - _is_cdp={self._is_cdp}, _reused_page={self._reused_page}")
+
         if self._is_cdp:
+            await context.log("debug", f"CDP 模式清理 - reused_page={self._reused_page}")
             if not self._reused_page:
                 try:
                     if context.page and not context.page.is_closed():
                         await context.page.close()
-                except Exception:
-                    pass
+                        await context.log("debug", "已关闭 CDP 模式下创建的新页面")
+                except Exception as e:
+                    await context.log("debug", f"关闭页面时出错: {e}")
+            else:
+                await context.log("debug", "复用的页面保持打开（不关闭）")
         elif self.playwright is not None:
+            await context.log("debug", "独立浏览器模式，停止 Playwright")
             try:
                 await self.playwright.stop()
-            except Exception:
-                pass
+                await context.log("debug", "Playwright 已停止")
+            except Exception as e:
+                await context.log("debug", f"停止 Playwright 时出错: {e}")
+        else:
+            await context.log("debug", "无需要清理的资源")
 
     @property
     def is_cdp(self) -> bool:

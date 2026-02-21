@@ -9,18 +9,10 @@ type LogLevelFilter = 'all' | 'info' | 'warning' | 'error'
 
 export function ExecutionPanel() {
   const { executionState, isConnected } = useExecutionStore()
-  const { startExecution, stopExecution, respondUserInput } = useExecution()
+  const { stopExecution, respondUserInput } = useExecution()
 
   const { isRunning, screenshot, logs, userInputRequest, nodeRecords } = executionState
   const [activeTab, setActiveTab] = useState<TabType>('screenshot')
-
-  const handleStart = () => {
-    const { executionMode } = useExecutionStore.getState()
-    const workflowId = useExecutionStore.getState().executionState.executionId
-    if (workflowId) {
-      startExecution(workflowId, executionMode)
-    }
-  }
 
   return (
     <div className="h-full flex flex-col bg-gray-900 text-white">
@@ -36,18 +28,6 @@ export function ExecutionPanel() {
           </span>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={handleStart}
-            disabled={isRunning}
-            className={`
-              px-3 py-1 text-sm rounded
-              ${isRunning
-                ? 'bg-gray-600 cursor-not-allowed'
-                : 'bg-green-600 hover:bg-green-700'}
-            `}
-          >
-            ▶ 执行
-          </button>
           <button
             onClick={stopExecution}
             disabled={!isRunning}
