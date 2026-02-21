@@ -4,6 +4,9 @@ import { useExecution } from '@/hooks/useExecution'
 import type { NodeExecutionRecord, WSLog, WSUserInputRequired } from '@/types/workflow'
 import { EmptyState } from '@/components/common'
 import { Button } from '@/components/ui/Button'
+import { Badge, type BadgeStatus } from '@/components/ui/Badge'
+import { NodeRecordList } from './NodeRecordList'
+import { twSemanticColors, twColors, twTransitions } from '@/constants/designTokens'
 
 type TabType = 'screenshot' | 'nodes' | 'logs'
 type LogLevelFilter = 'all' | 'info' | 'warning' | 'error'
@@ -26,15 +29,16 @@ export function ExecutionPanel() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-gray-900 text-white">
-      <div className="p-3 border-b border-gray-700 flex items-center justify-between">
+    <div className={`h-full flex flex-col ${twSemanticColors.bg.surface} ${twSemanticColors.text.primary}`}>
+      {/* Header */}
+      <div className={`p-3 border-b ${twSemanticColors.border.default} flex items-center justify-between`}>
         <div className="flex items-center gap-2">
           <span
             className={`w-2 h-2 rounded-full ${
-              isConnected ? 'bg-green-500' : 'bg-red-500'
+              isConnected ? twColors.status.success.bg : twColors.status.error.bg
             }`}
           />
-          <span className="text-sm">
+          <span className="text-sm font-medium">
             {isRunning ? '执行中' : isConnected ? '已连接' : '未连接'}
           </span>
         </div>
@@ -46,7 +50,7 @@ export function ExecutionPanel() {
             variant="danger"
             size="sm"
           >
-            ■ 停止
+            停止
           </Button>
         </div>
       </div>
@@ -58,7 +62,8 @@ export function ExecutionPanel() {
         />
       )}
 
-      <div className="flex border-b border-gray-700 text-sm">
+      {/* Tabs */}
+      <div className={`flex border-b ${twSemanticColors.border.default}`}>
         {([
           ['screenshot', '截图'],
           ['nodes', '节点记录'],
@@ -67,20 +72,34 @@ export function ExecutionPanel() {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 ${
-              activeTab === tab
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
+            className={`
+              relative px-4 py-2.5 text-sm font-medium
+              ${twTransitions.normal}
+              ${activeTab === tab
+                ? twSemanticColors.text.primary
+                : twSemanticColors.text.secondary + ' hover:text-neutral-700'
+              }
+            `}
           >
             {label}
             {tab === 'nodes' && nodeRecords.length > 0 && (
-              <span className="ml-1 text-xs text-gray-500">({nodeRecords.length})</span>
+              <span className={`ml-1.5 text-xs ${twSemanticColors.text.tertiary}`}>
+                ({nodeRecords.length})
+              </span>
             )}
+            {/* Active indicator */}
+            <span
+              className={`
+                absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500
+                ${twTransitions.normal}
+                ${activeTab === tab ? 'opacity-100' : 'opacity-0'}
+              `}
+            />
           </button>
         ))}
       </div>
 
+      {/* Content */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'screenshot' && (
           <ScreenshotView screenshot={screenshot} />
@@ -126,40 +145,56 @@ function ScreenshotView({ screenshot }: { screenshot: string | null }) {
   return (
     <>
       <div className="h-full flex flex-col">
-        <div className="flex items-center gap-2 px-2 py-1 bg-gray-800 border-b border-gray-700 text-xs">
-          <button
+        {/* Toolbar */}
+        <div className={`flex items-center gap-2 px-3 py-2 border-b ${twSemanticColors.border.default} ${twSemanticColors.bg.sunken}`}>
+          <Button
             onClick={zoomOut}
             disabled={scale <= minScale}
-            className="px-2 py-0.5 bg-gray-700 hover:bg-gray-600 rounded disabled:opacity-50"
+            variant="ghost"
+            size="sm"
+            iconOnly
           >
-            -
-          </button>
-          <span className="w-14 text-center">{Math.round(scale * 100)}%</span>
-          <button
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+            </svg>
+          </Button>
+          <span className={`w-16 text-center text-sm font-medium ${twSemanticColors.text.primary}`}>
+            {Math.round(scale * 100)}%
+          </span>
+          <Button
             onClick={zoomIn}
             disabled={scale >= maxScale}
-            className="px-2 py-0.5 bg-gray-700 hover:bg-gray-600 rounded disabled:opacity-50"
+            variant="ghost"
+            size="sm"
+            iconOnly
           >
-            +
-          </button>
-          <button
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </Button>
+          <Button
             onClick={resetZoom}
-            className="px-2 py-0.5 bg-gray-700 hover:bg-gray-600 rounded"
+            variant="ghost"
+            size="sm"
           >
             重置
-          </button>
-          <span className="text-gray-500 ml-2">滚轮缩放</span>
+          </Button>
+          <span className={`ml-2 text-xs ${twSemanticColors.text.tertiary}`}>
+            滚轮缩放 · 点击查看大图
+          </span>
         </div>
+        
+        {/* Screenshot Area */}
         <div
           ref={containerRef}
-          className="flex-1 overflow-auto p-2 bg-gray-950"
+          className={`flex-1 overflow-auto p-4 ${twSemanticColors.bg.sunken}`}
         >
           {screenshot ? (
             <img
               src={`data:image/jpeg;base64,${screenshot}`}
               alt="执行截图"
               onClick={() => setShowModal(true)}
-              className="cursor-zoom-in rounded transition-transform origin-top-left"
+              className="cursor-zoom-in rounded shadow-sm transition-transform origin-top-left"
               style={{ transform: `scale(${scale})` }}
               draggable={false}
             />
@@ -216,41 +251,58 @@ function ScreenshotModal({
   return (
     <div
       ref={modalRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
       onClick={onClose}
       tabIndex={0}
     >
-      <div className="absolute top-4 right-4 flex items-center gap-2 text-white text-sm">
-        <button
+      {/* Toolbar */}
+      <div className="absolute top-4 right-4 flex items-center gap-2 bg-neutral-800 rounded-lg p-2 text-white">
+        <Button
           onClick={(e) => {
             e.stopPropagation()
             setScale((prev) => Math.max(0.25, prev - 0.25))
           }}
-          className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded"
+          variant="ghost"
+          size="sm"
+          iconOnly
+          className="text-white hover:bg-neutral-700"
         >
-          -
-        </button>
-        <span className="w-14 text-center">{Math.round(scale * 100)}%</span>
-        <button
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+          </svg>
+        </Button>
+        <span className="w-16 text-center text-sm font-medium">
+          {Math.round(scale * 100)}%
+        </span>
+        <Button
           onClick={(e) => {
             e.stopPropagation()
             setScale((prev) => Math.min(4, prev + 0.25))
           }}
-          className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded"
+          variant="ghost"
+          size="sm"
+          iconOnly
+          className="text-white hover:bg-neutral-700"
         >
-          +
-        </button>
-        <button
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+        </Button>
+        <Button
           onClick={(e) => {
             e.stopPropagation()
             setScale(1)
           }}
-          className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded"
+          variant="ghost"
+          size="sm"
+          className="text-white hover:bg-neutral-700"
         >
           重置
-        </button>
-        <span className="ml-4 text-gray-400">ESC 关闭</span>
+        </Button>
+        <div className="w-px h-4 bg-neutral-600 mx-1" />
+        <span className="text-xs text-neutral-400">ESC 关闭</span>
       </div>
+      
       <img
         src={`data:image/jpeg;base64,${screenshot}`}
         alt="截图放大"
@@ -259,142 +311,6 @@ function ScreenshotModal({
         style={{ transform: `scale(${scale})` }}
         draggable={false}
       />
-    </div>
-  )
-}
-
-function NodeRecordList({ records }: { records: NodeExecutionRecord[] }) {
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-
-  if (records.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <EmptyState
-          icon="🔧"
-          title="暂无执行记录"
-          description="执行工作流后将显示节点执行记录"
-        />
-      </div>
-    )
-  }
-
-  const totalDuration = records.reduce(
-    (sum, r) => sum + (r.duration_ms || 0),
-    0
-  )
-  const maxDuration = Math.max(...records.map((r) => r.duration_ms || 0))
-
-  const statusConfig: Record<string, { color: string; label: string }> = {
-    completed: { color: 'bg-green-500', label: '完成' },
-    failed: { color: 'bg-red-500', label: '失败' },
-    running: { color: 'bg-blue-500 animate-pulse', label: '执行中' },
-    pending: { color: 'bg-gray-500', label: '等待' },
-    skipped: { color: 'bg-yellow-500', label: '跳过' },
-  }
-
-  return (
-    <div className="h-full flex flex-col">
-      <div className="px-3 py-2 bg-gray-800 border-b border-gray-700 text-xs flex items-center justify-between">
-        <span className="text-gray-400">共 {records.length} 个节点</span>
-        <span className="text-blue-400">
-          总耗时: {formatDuration(totalDuration)}
-        </span>
-      </div>
-      <div className="flex-1 overflow-y-auto">
-        <div className="divide-y divide-gray-700">
-          {records.map((record, index) => {
-            const cfg = statusConfig[record.status] || statusConfig.pending
-            const isExpanded = expandedId === record.node_id
-            const barWidth =
-              maxDuration > 0
-                ? ((record.duration_ms || 0) / maxDuration) * 100
-                : 0
-
-            return (
-              <div key={record.node_id}>
-                <button
-                  onClick={() =>
-                    setExpandedId(isExpanded ? null : record.node_id)
-                  }
-                  className="w-full px-3 py-2 flex items-center gap-2 hover:bg-gray-800 text-left"
-                >
-                  <span className="w-5 text-xs text-gray-500">{index + 1}</span>
-                  <span
-                    className={`w-2 h-2 rounded-full shrink-0 ${cfg.color}`}
-                  />
-                  <span className="text-sm flex-1 truncate">
-                    {record.node_label}
-                  </span>
-                  <span className="text-xs text-gray-500 w-16 text-right">
-                    {record.duration_ms != null
-                      ? formatDuration(record.duration_ms)
-                      : '-'}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {isExpanded ? '▼' : '▶'}
-                  </span>
-                </button>
-                <div className="px-3 pb-2">
-                  <div className="h-1.5 bg-gray-700 rounded overflow-hidden">
-                    <div
-                      className={`h-full transition-all ${
-                        record.status === 'completed'
-                          ? 'bg-green-500'
-                          : record.status === 'failed'
-                          ? 'bg-red-500'
-                          : 'bg-blue-500'
-                      }`}
-                      style={{ width: `${barWidth}%` }}
-                    />
-                  </div>
-                </div>
-                {isExpanded && (
-                  <div className="px-4 pb-3 text-xs font-mono bg-gray-800/50">
-                    <div className="flex gap-4 text-gray-400 mb-2">
-                      <span>类型: {record.node_type}</span>
-                      <span>状态: {cfg.label}</span>
-                      {record.started_at && (
-                        <span>
-                          开始: {new Date(record.started_at).toLocaleTimeString()}
-                        </span>
-                      )}
-                    </div>
-                    {record.error && (
-                      <div className="text-red-400 py-1">错误: {record.error}</div>
-                    )}
-                    {record.result && (
-                      <div className="text-gray-300 py-1">
-                        <span className="text-gray-500">返回值: </span>
-                        <pre className="mt-1 p-2 bg-gray-900 rounded overflow-x-auto">
-                          {JSON.stringify(record.result, null, 2)}
-                        </pre>
-                      </div>
-                    )}
-                    {record.logs.length > 0 && (
-                      <div className="mt-1 border-t border-gray-700 pt-1">
-                        {record.logs.map((log, i) => (
-                          <div
-                            key={i}
-                            className={`py-0.5 ${
-                              log.level === 'error'
-                                ? 'text-red-400'
-                                : log.level === 'warning'
-                                ? 'text-yellow-400'
-                                : 'text-gray-400'
-                            }`}
-                          >
-                            {log.message}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
     </div>
   )
 }
@@ -433,49 +349,95 @@ function LogViewer({ logs }: { logs: WSLog[] }) {
     error: logs.filter((l) => l.level === 'error').length,
   }
 
+  const getLogLevelStyle = (level: string) => {
+    switch (level) {
+      case 'error':
+        return {
+          text: twColors.status.error.text,
+          bg: 'bg-red-50',
+          border: 'border-red-100',
+        }
+      case 'warning':
+        return {
+          text: twColors.status.warning.text,
+          bg: 'bg-amber-50',
+          border: 'border-amber-100',
+        }
+      default:
+        return {
+          text: twSemanticColors.text.primary,
+          bg: 'bg-transparent',
+          border: 'border-transparent',
+        }
+    }
+  }
+
+  const filterButtons: { level: LogLevelFilter; label: string; color: string }[] = [
+    { level: 'all', label: '全部', color: 'neutral' },
+    { level: 'info', label: '信息', color: 'blue' },
+    { level: 'warning', label: '警告', color: 'amber' },
+    { level: 'error', label: '错误', color: 'red' },
+  ]
+
   return (
     <div className="h-full flex flex-col">
-      <div className="px-2 py-2 bg-gray-800 border-b border-gray-700 flex items-center gap-2">
-        <div className="flex bg-gray-700 rounded text-xs">
-          {(['all', 'info', 'warning', 'error'] as LogLevelFilter[]).map(
-            (level) => (
-              <button
+      {/* Filter Toolbar */}
+      <div className={`px-3 py-2 border-b ${twSemanticColors.border.default} ${twSemanticColors.bg.sunken} flex items-center gap-2`}>
+        <div className="flex items-center gap-1">
+          {filterButtons.map(({ level, label }) => {
+            const isActive = levelFilter === level
+            const variant = isActive ? 'secondary' : 'ghost'
+            
+            return (
+              <Button
                 key={level}
                 onClick={() => setLevelFilter(level)}
-                className={`px-2 py-1 rounded transition-colors ${
-                  levelFilter === level
-                    ? level === 'error'
-                      ? 'bg-red-600 text-white'
-                      : level === 'warning'
-                      ? 'bg-yellow-600 text-white'
-                      : level === 'info'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-600 text-white'
-                    : 'text-gray-400 hover:text-white'
-                }`}
+                variant={variant}
+                size="sm"
+                className={isActive ? 'bg-white border-neutral-200' : ''}
               >
-                {level === 'all' ? '全部' : level === 'info' ? '信息' : level === 'warning' ? '警告' : '错误'}
-                <span className="ml-1 opacity-60">({levelCounts[level]})</span>
-              </button>
+                {label}
+                <span className={`ml-1 text-xs ${isActive ? twSemanticColors.text.secondary : twSemanticColors.text.tertiary}`}>
+                  {levelCounts[level]}
+                </span>
+              </Button>
             )
+          })}
+        </div>
+        <div className="flex-1" />
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="搜索日志..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className={`
+              w-48 px-3 py-1.5 text-xs rounded-md border
+              ${twSemanticColors.bg.surface}
+              ${twSemanticColors.border.default}
+              ${twSemanticColors.text.primary}
+              placeholder:text-neutral-400
+              focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent
+              ${twTransitions.normal}
+            `}
+          />
+          {searchTerm && (
+            <Button
+              onClick={() => setSearchTerm('')}
+              variant="ghost"
+              size="sm"
+              iconOnly
+              className="absolute right-1 top-1/2 -translate-y-1/2"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </Button>
           )}
         </div>
-        <input
-          type="text"
-          placeholder="搜索日志..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-        />
-        {searchTerm && (
-          <button
-            onClick={() => setSearchTerm('')}
-            className="px-2 py-1 text-xs text-gray-400 hover:text-white"
-          >
-            清除
-          </button>
-        )}
       </div>
+      
+      {/* Log List */}
       <div
         ref={listRef}
         onScroll={handleScroll}
@@ -491,50 +453,50 @@ function LogViewer({ logs }: { logs: WSLog[] }) {
               />
             </div>
           ) : (
-            <div className="text-gray-500">没有匹配的日志</div>
+            <div className={twSemanticColors.text.tertiary}>没有匹配的日志</div>
           )
         ) : (
-          filteredLogs.map((log, index) => (
-            <div
-              key={index}
-              className={`py-0.5 ${
-                log.level === 'error'
-                  ? 'text-red-400 bg-red-900/20'
-                  : log.level === 'warning'
-                  ? 'text-yellow-400 bg-yellow-900/20'
-                  : 'text-gray-300'
-              }`}
-            >
-              <span className="text-gray-500">
-                [{new Date(log.timestamp).toLocaleTimeString()}]
-              </span>{' '}
-              <span
-                className={`inline-block w-8 ${
-                  log.level === 'error'
-                    ? 'text-red-400'
-                    : log.level === 'warning'
-                    ? 'text-yellow-400'
-                    : 'text-blue-400'
-                }`}
-              >
-                [{log.level.toUpperCase().slice(0, 3)}]
-              </span>{' '}
-              <span className="break-all">{log.message}</span>
-            </div>
-          ))
+          <div className="space-y-1">
+            {filteredLogs.map((log, index) => {
+              const style = getLogLevelStyle(log.level)
+              return (
+                <div
+                  key={index}
+                  className={`
+                    py-1 px-2 rounded
+                    ${style.bg} ${style.border} border
+                    ${twTransitions.fast}
+                  `}
+                >
+                  <span className={twSemanticColors.text.tertiary}>
+                    [{new Date(log.timestamp).toLocaleTimeString()}]
+                  </span>{' '}
+                  <span className={`inline-block w-10 font-semibold ${style.text}`}>
+                    [{log.level.toUpperCase().slice(0, 4)}]
+                  </span>{' '}
+                  <span className={`break-all ${twSemanticColors.text.primary}`}>
+                    {log.message}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         )}
+        
         {!autoScroll && filteredLogs.length > 0 && (
-          <button
+          <Button
             onClick={() => {
               setAutoScroll(true)
               if (listRef.current) {
                 listRef.current.scrollTop = listRef.current.scrollHeight
               }
             }}
-            className="sticky bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs"
+            variant="primary"
+            size="sm"
+            className="sticky bottom-2 left-1/2 -translate-x-1/2 shadow-md"
           >
             滚动到最新
-          </button>
+          </Button>
         )}
       </div>
     </div>
@@ -577,19 +539,18 @@ function UserInputDialog({ request, onResponse }: UserInputDialogProps) {
   }
 
   return (
-    <div className="p-4 bg-yellow-900/50 border-b border-yellow-700">
+    <div className={`p-4 border-b ${twSemanticColors.border.default} ${twColors.status.warning.bg}`}>
       <div className="flex items-start gap-3">
         <span className="text-2xl">🙋</span>
         <div className="flex-1">
-          <h4 className="font-medium text-yellow-200">需要用户操作</h4>
-          <p className="text-sm text-yellow-100 mt-1">{request.prompt}</p>
+          <h4 className={`font-medium ${twColors.status.warning.text}`}>需要用户操作</h4>
+          <p className={`text-sm mt-1 ${twSemanticColors.text.secondary}`}>{request.prompt}</p>
           <div className="flex gap-2 mt-3">
             <Button
               onClick={handleContinue}
               loading={isContinuing}
               variant="primary"
               size="sm"
-              className="bg-green-600 hover:bg-green-700"
             >
               继续执行
             </Button>
@@ -598,7 +559,6 @@ function UserInputDialog({ request, onResponse }: UserInputDialogProps) {
               loading={isCancelling}
               variant="secondary"
               size="sm"
-              className="bg-gray-600 hover:bg-gray-700 text-white"
             >
               取消
             </Button>

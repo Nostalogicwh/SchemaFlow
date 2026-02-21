@@ -8,7 +8,7 @@
  * - 统一的focus状态(ring效果)
  */
 
-import { useId, forwardRef, useState } from 'react'
+import { forwardRef, useState } from 'react'
 import { cn } from '@/utils'
 import { X, LucideIcon } from 'lucide-react'
 

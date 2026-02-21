@@ -7,7 +7,7 @@
  * - 统一布局（label在上或左）
  */
 
-import { useId, cloneElement, isValidElement, ReactElement } from 'react'
+import { useId, cloneElement, isValidElement, type ReactElement } from 'react'
 import { cn } from '@/utils'
 
 export type LabelPosition = 'top' | 'left'

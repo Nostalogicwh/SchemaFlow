@@ -7,6 +7,8 @@ import { LoadingSpinner, EmptyState } from '@/components/common'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { FormField } from '@/components/ui/FormField'
+import { Button } from '@/components/ui/Button'
+import { Search, Plus, RefreshCw, Trash2 } from 'lucide-react'
 
 interface WorkflowListProps {
   selectedId: string | null
@@ -157,76 +159,89 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
 
   return (
     <div className="h-full flex flex-col">
-      <div className="p-3 border-b flex justify-between items-center">
-        <h2 className="font-bold text-sm">工作流</h2>
-        <button
+      <div className="p-3 border-b border-neutral-200 flex justify-between items-center bg-white">
+        <h2 className="font-semibold text-sm text-neutral-900">工作流</h2>
+        <Button
           onClick={handleOpenCreateModal}
-          className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+          size="sm"
+          icon={<Plus className="w-3.5 h-3.5" />}
         >
-          + 新建
-        </button>
+          新建
+        </Button>
       </div>
 
-      <div className="px-3 py-2 border-b">
-        <div className="relative">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="搜索工作流..."
-            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-400 pr-7"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
-            >
-              ✕
-            </button>
-          )}
-        </div>
+      <div className="px-3 py-2 border-b border-neutral-200 bg-neutral-50">
+        <Input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="搜索工作流..."
+          prefixIcon={Search}
+          clearable
+          size="sm"
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {filteredWorkflows.length === 0 ? (
-          <EmptyState
-            icon={searchQuery ? '🔍' : '📋'}
-            title={searchQuery ? '未找到匹配的工作流' : '暂无工作流'}
-            description={searchQuery ? '尝试其他关键词' : '创建您的第一个工作流开始使用'}
-            action={!searchQuery ? { label: '新建工作流', onClick: handleOpenCreateModal } : undefined}
-          />
+          <div className="h-full flex items-center justify-center px-4">
+            <EmptyState
+              icon={searchQuery ? '🔍' : '📋'}
+              title={searchQuery ? '未找到匹配的工作流' : '暂无工作流'}
+              description={searchQuery ? '尝试其他关键词' : '创建您的第一个工作流开始使用'}
+              action={!searchQuery ? { label: '新建工作流', onClick: handleOpenCreateModal } : undefined}
+            />
+          </div>
         ) : (
-          <div className="divide-y">
+          <div className="py-1">
             {filteredWorkflows.map((workflow) => (
               <div
                 key={workflow.id}
                 onClick={() => onSelect(workflow.id)}
                 className={`
-                  p-3 cursor-pointer hover:bg-gray-50 transition-colors
-                  ${selectedId === workflow.id ? 'bg-blue-50 border-l-2 border-blue-500' : ''}
+                  group relative px-3 py-2.5 mx-2 rounded-lg cursor-pointer transition-all duration-200
+                  ${selectedId === workflow.id 
+                    ? 'bg-blue-50 shadow-sm' 
+                    : 'hover:bg-neutral-100'
+                  }
                 `}
               >
-                <div className="flex justify-between items-start">
+                {/* 左侧高亮色条 */}
+                <div className={`
+                  absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full transition-all duration-200
+                  ${selectedId === workflow.id ? 'bg-blue-500 opacity-100' : 'bg-blue-400 opacity-0 group-hover:opacity-50'}
+                `} />
+                
+                <div className="flex justify-between items-start pl-2">
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-sm truncate">{workflow.name}</h3>
+                    <h3 className={`
+                      font-medium text-sm truncate transition-colors
+                      ${selectedId === workflow.id ? 'text-blue-900' : 'text-neutral-900'}
+                    `}>
+                      {workflow.name}
+                    </h3>
                     {workflow.description && (
-                      <p className="text-xs text-gray-500 truncate mt-0.5">
+                      <p className="text-xs text-neutral-500 truncate mt-0.5">
                         {workflow.description}
                       </p>
                     )}
                     {workflow.updated_at && (
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-xs text-neutral-400 mt-1.5 flex items-center gap-1">
+                        <span className="w-1 h-1 rounded-full bg-neutral-300" />
                         {formatRelativeTime(workflow.updated_at)}
                       </p>
                     )}
                   </div>
-                  <button
-                    onClick={(e) => handleDelete(workflow.id, e)}
-                    className="ml-2 text-gray-400 hover:text-red-500 text-xs"
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    iconOnly
+                    onClick={(e) => handleDelete(workflow.id, e as React.MouseEvent)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity -mr-1"
                     title="删除"
                   >
-                    ✕
-                  </button>
+                    <Trash2 className="w-3.5 h-3.5 text-neutral-400 hover:text-red-500" />
+                  </Button>
                 </div>
               </div>
             ))}
@@ -234,13 +249,16 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
         )}
       </div>
 
-      <div className="p-2 border-t">
-        <button
+      <div className="p-2 border-t border-neutral-200 bg-white">
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<RefreshCw className="w-3.5 h-3.5" />}
           onClick={loadWorkflows}
-          className="w-full py-1 text-xs text-gray-500 hover:text-gray-700"
+          className="w-full"
         >
           刷新列表
-        </button>
+        </Button>
       </div>
 
       {/* 创建工作流弹窗 */}
@@ -251,38 +269,20 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
         size="sm"
         footer={
           <div className="flex justify-end gap-2">
-            <button
+            <Button
+              variant="ghost"
               onClick={handleCloseCreateModal}
               disabled={isCreating}
-              className="px-4 py-2 text-sm text-neutral-600 hover:text-neutral-800 hover:bg-neutral-100 rounded-md transition-colors disabled:opacity-50"
             >
               取消
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleCreateWorkflow}
+              loading={isCreating}
               disabled={isCreating}
-              className="px-4 py-2 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {isCreating && (
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-              )}
               {isCreating ? '创建中...' : '创建'}
-            </button>
+            </Button>
           </div>
         }
       >
