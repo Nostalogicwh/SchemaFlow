@@ -6,8 +6,9 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 from pathlib import Path
 
-from .context import ExecutionContext, ExecutionStatus
+from .context import ExecutionContext, ExecutionStatus, NodeExecutionRecord
 from .actions import registry
+from repository import get_execution_repo
 
 
 def topological_sort(nodes: List[Dict], edges: List[Dict]) -> List[str]:
@@ -183,8 +184,19 @@ class WorkflowExecutor:
 
             node_type = node.get("type")
             config = node.get("config", {})
+            node_label = node.get("label", node_type)
 
             context.current_node_id = node_id
+
+            # 创建节点执行记录
+            record = NodeExecutionRecord(
+                node_id=node_id,
+                node_type=node_type,
+                node_label=node_label,
+                status="running",
+                started_at=datetime.now().isoformat(),
+            )
+            context.node_records[node_id] = record
 
             # 发送节点开始消息
             if context.websocket:
@@ -207,26 +219,42 @@ class WorkflowExecutor:
             try:
                 result = await execute_func(context, resolved_config)
 
-                # 发送节点完成消息
+                # 更新节点记录
+                record.status = "completed"
+                record.finished_at = datetime.now().isoformat()
+                record.duration_ms = int((datetime.fromisoformat(record.finished_at) - datetime.fromisoformat(record.started_at)).total_seconds() * 1000)
+                record.result = result if isinstance(result, dict) else {"value": result}
+                record.logs = [log for log in context.logs if log.get("node_id") == node_id]
+
+                # 发送节点完成消息（携带结构化记录）
                 if context.websocket:
                     await context.websocket.send_json({
                         "type": "node_complete",
                         "node_id": node_id,
                         "success": True,
-                        "result": result
+                        "result": result,
+                        "record": record.to_dict()
                     })
 
                 # 每个节点后发送截图
                 await context.send_screenshot()
 
             except Exception as e:
+                # 更新节点记录
+                record.status = "failed"
+                record.finished_at = datetime.now().isoformat()
+                record.duration_ms = int((datetime.fromisoformat(record.finished_at) - datetime.fromisoformat(record.started_at)).total_seconds() * 1000)
+                record.error = str(e)
+                record.logs = [log for log in context.logs if log.get("node_id") == node_id]
+
                 # 发送节点失败消息
                 if context.websocket:
                     await context.websocket.send_json({
                         "type": "node_complete",
                         "node_id": node_id,
                         "success": False,
-                        "error": str(e)
+                        "error": str(e),
+                        "record": record.to_dict()
                     })
                 await context.log("error", f"节点 {node_id} 执行失败: {str(e)}")
                 raise
@@ -243,6 +271,29 @@ class WorkflowExecutor:
                 "duration": (context.end_time - context.start_time).total_seconds() if context.end_time else 0,
                 "logs": context.logs
             })
+
+        # 持久化执行记录
+        await self._save_execution_record(context, workflow)
+
+    async def _save_execution_record(self, context: ExecutionContext, workflow: Dict[str, Any]):
+        """持久化执行记录到 repository。"""
+        try:
+            repo = get_execution_repo()
+            execution_log = {
+                "execution_id": context.execution_id,
+                "workflow_id": context.workflow_id,
+                "status": context.status.value,
+                "started_at": context.start_time.isoformat() if context.start_time else None,
+                "finished_at": context.end_time.isoformat() if context.end_time else None,
+                "duration_ms": int((context.end_time - context.start_time).total_seconds() * 1000) if context.start_time and context.end_time else None,
+                "total_nodes": len(workflow.get("nodes", [])),
+                "completed_nodes": sum(1 for r in context.node_records.values() if r.status == "completed"),
+                "failed_nodes": sum(1 for r in context.node_records.values() if r.status == "failed"),
+                "node_records": [r.to_dict() for r in context.node_records.values()],
+            }
+            await repo.save_execution(execution_log)
+        except Exception as e:
+            await context.log("error", f"保存执行记录失败: {e}")
 
     def _resolve_variables(self, config: Any, variables: Dict[str, Any]) -> Any:
         """解析变量引用 {{variable_name}}。

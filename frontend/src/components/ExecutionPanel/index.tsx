@@ -1,7 +1,10 @@
 /**
- * 执行监控面板 - 显示执行状态、截图和日志
+ * 执行监控面板 - 显示执行状态、截图、节点记录和日志
  */
-import type { ExecutionState, WSUserInputRequired } from '@/types/workflow'
+import { useState } from 'react'
+import type { ExecutionState, WSUserInputRequired, NodeExecutionRecord } from '@/types/workflow'
+
+type TabType = 'screenshot' | 'nodes' | 'logs'
 
 interface ExecutionPanelProps {
   executionState: ExecutionState
@@ -18,7 +21,8 @@ export function ExecutionPanel({
   onStop,
   onUserInputResponse,
 }: ExecutionPanelProps) {
-  const { isRunning, screenshot, logs, userInputRequest } = executionState
+  const { isRunning, screenshot, logs, userInputRequest, nodeRecords } = executionState
+  const [activeTab, setActiveTab] = useState<TabType>('screenshot')
 
   return (
     <div className="h-full flex flex-col bg-gray-900 text-white">
@@ -70,52 +74,149 @@ export function ExecutionPanel({
         />
       )}
 
-      {/* 截图区域 */}
-      <div className="flex-1 p-2 overflow-hidden">
-        {screenshot ? (
-          <img
-            src={`data:image/jpeg;base64,${screenshot}`}
-            alt="执行截图"
-            className="w-full h-full object-contain rounded"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-500">
-            <span>执行后显示截图</span>
-          </div>
-        )}
+      {/* Tab 切换 */}
+      <div className="flex border-b border-gray-700 text-sm">
+        {([
+          ['screenshot', '截图'],
+          ['nodes', '节点记录'],
+          ['logs', '日志'],
+        ] as [TabType, string][]).map(([tab, label]) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 ${
+              activeTab === tab
+                ? 'text-blue-400 border-b-2 border-blue-400'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            {label}
+            {tab === 'nodes' && nodeRecords.length > 0 && (
+              <span className="ml-1 text-xs text-gray-500">({nodeRecords.length})</span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* 日志区域 */}
-      <div className="h-48 border-t border-gray-700 overflow-y-auto">
-        <div className="p-2 text-xs font-mono">
-          {logs.length === 0 ? (
-            <div className="text-gray-500">暂无日志</div>
-          ) : (
-            logs.map((log, index) => (
-              <div
-                key={index}
-                className={`py-0.5 ${
-                  log.level === 'error'
-                    ? 'text-red-400'
-                    : log.level === 'warning'
-                    ? 'text-yellow-400'
-                    : 'text-gray-300'
-                }`}
-              >
-                <span className="text-gray-500">
-                  [{new Date(log.timestamp).toLocaleTimeString()}]
-                </span>{' '}
-                {log.message}
+      {/* Tab 内容 */}
+      <div className="flex-1 overflow-y-auto">
+        {activeTab === 'screenshot' && (
+          <div className="h-full p-2">
+            {screenshot ? (
+              <img
+                src={`data:image/jpeg;base64,${screenshot}`}
+                alt="执行截图"
+                className="w-full h-full object-contain rounded"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-gray-500">
+                <span>执行后显示截图</span>
               </div>
-            ))
-          )}
-        </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'nodes' && (
+          <NodeRecordList records={nodeRecords} />
+        )}
+
+        {activeTab === 'logs' && (
+          <div className="p-2 text-xs font-mono">
+            {logs.length === 0 ? (
+              <div className="text-gray-500">暂无日志</div>
+            ) : (
+              logs.map((log, index) => (
+                <div
+                  key={index}
+                  className={`py-0.5 ${
+                    log.level === 'error'
+                      ? 'text-red-400'
+                      : log.level === 'warning'
+                      ? 'text-yellow-400'
+                      : 'text-gray-300'
+                  }`}
+                >
+                  <span className="text-gray-500">
+                    [{new Date(log.timestamp).toLocaleTimeString()}]
+                  </span>{' '}
+                  {log.message}
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-// 用户输入对话框
+// 节点执行记录列表
+function NodeRecordList({ records }: { records: NodeExecutionRecord[] }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  if (records.length === 0) {
+    return <div className="p-4 text-gray-500 text-sm">暂无节点执行记录</div>
+  }
+
+  const statusConfig: Record<string, { color: string; label: string }> = {
+    completed: { color: 'bg-green-500', label: '完成' },
+    failed: { color: 'bg-red-500', label: '失败' },
+    running: { color: 'bg-blue-500 animate-pulse', label: '执行中' },
+    pending: { color: 'bg-gray-500', label: '等待' },
+    skipped: { color: 'bg-yellow-500', label: '跳过' },
+  }
+
+  return (
+    <div className="divide-y divide-gray-700">
+      {records.map((record) => {
+        const cfg = statusConfig[record.status] || statusConfig.pending
+        const isExpanded = expandedId === record.node_id
+        return (
+          <div key={record.node_id}>
+            <button
+              onClick={() => setExpandedId(isExpanded ? null : record.node_id)}
+              className="w-full px-3 py-2 flex items-center gap-2 hover:bg-gray-800 text-left"
+            >
+              <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.color}`} />
+              <span className="text-sm flex-1 truncate">{record.node_label}</span>
+              <span className="text-xs text-gray-500">{record.node_type}</span>
+              {record.duration_ms != null && (
+                <span className="text-xs text-gray-400">{record.duration_ms}ms</span>
+              )}
+              <span className="text-xs text-gray-500">{isExpanded ? '▼' : '▶'}</span>
+            </button>
+            {isExpanded && (
+              <div className="px-4 pb-3 text-xs font-mono bg-gray-800/50">
+                {record.error && (
+                  <div className="text-red-400 py-1">错误: {record.error}</div>
+                )}
+                {record.result && (
+                  <div className="text-gray-300 py-1">
+                    <span className="text-gray-500">返回值: </span>
+                    {JSON.stringify(record.result, null, 2)}
+                  </div>
+                )}
+                {record.logs.length > 0 && (
+                  <div className="mt-1 border-t border-gray-700 pt-1">
+                    {record.logs.map((log, i) => (
+                      <div key={i} className={`py-0.5 ${
+                        log.level === 'error' ? 'text-red-400'
+                          : log.level === 'warning' ? 'text-yellow-400'
+                          : 'text-gray-400'
+                      }`}>
+                        {log.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 interface UserInputDialogProps {
   request: WSUserInputRequired
   onResponse: (nodeId: string, action: 'continue' | 'cancel') => void

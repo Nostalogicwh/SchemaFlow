@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from storage.file_storage import JSONFileStorage
+from repository import get_execution_repo
 
 router = APIRouter(prefix="/api", tags=["workflows"])
 
@@ -99,3 +100,20 @@ async def delete_workflow(workflow_id: str) -> Dict[str, Any]:
     if not success:
         raise HTTPException(status_code=404, detail="工作流不存在")
     return {"success": True, "workflow_id": workflow_id}
+
+
+@router.get("/workflows/{workflow_id}/last-execution")
+async def get_last_execution(workflow_id: str) -> Dict[str, Any]:
+    """获取工作流最近一次执行记录。
+
+    Args:
+        workflow_id: 工作流 ID
+
+    Returns:
+        最近一次执行记录，不存在则返回 null
+    """
+    repo = get_execution_repo()
+    record = await repo.get_latest_execution(workflow_id)
+    if record is None:
+        return {"execution": None}
+    return {"execution": record}

@@ -2,7 +2,7 @@
  * API 封装层
  */
 import axios from 'axios'
-import type { Workflow, WorkflowListItem, ActionMetadata } from '@/types/workflow'
+import type { Workflow, WorkflowListItem, ActionMetadata, ExecutionRecord } from '@/types/workflow'
 
 // axios 实例
 const api = axios.create({
@@ -53,6 +53,12 @@ export const workflowApi = {
   // 停止执行
   stop: async (executionId: string): Promise<void> => {
     await api.post(`/executions/${executionId}/stop`)
+  },
+
+  // 获取最近一次执行记录
+  getLastExecution: async (id: string): Promise<{ execution: ExecutionRecord | null }> => {
+    const { data } = await api.get(`/workflows/${id}/last-execution`)
+    return data
   },
 }
 

@@ -1,5 +1,6 @@
 """执行上下文 - 管理单个工作流执行周期的状态。"""
 import asyncio
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -15,6 +16,38 @@ class ExecutionStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+@dataclass
+class NodeExecutionRecord:
+    """单个节点的执行记录。"""
+    node_id: str
+    node_type: str
+    node_label: str
+    status: str = "pending"           # pending | running | completed | failed | skipped
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    duration_ms: Optional[int] = None
+    result: Optional[dict] = None
+    error: Optional[str] = None
+    screenshot_base64: Optional[str] = None
+    logs: List[dict] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        """转为可序列化的字典。"""
+        return {
+            "node_id": self.node_id,
+            "node_type": self.node_type,
+            "node_label": self.node_label,
+            "status": self.status,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "duration_ms": self.duration_ms,
+            "result": self.result,
+            "error": self.error,
+            "screenshot_base64": self.screenshot_base64,
+            "logs": self.logs,
+        }
 
 
 class ExecutionContext:
@@ -70,6 +103,7 @@ class ExecutionContext:
         self.logs: List[Dict[str, Any]] = []
         self.screenshots: List[Dict[str, Any]] = []
         self.recorded_actions: List[Dict[str, Any]] = []
+        self.node_records: Dict[str, NodeExecutionRecord] = {}
 
         # 用户输入控制
         self._user_input_event = asyncio.Event()
