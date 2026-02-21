@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ 关键约束
+
+- **Python 版本为 3.9**：后端运行在 Python 3.9 环境下，禁止使用 3.10+ 语法（如 `X | Y` 类型联合，必须用 `Optional[X]` 或 `Union[X, Y]`；禁止 `match/case`）
+- **验证必须使用 venv Python**：提交前验证必须使用 `backend/.venv/bin/python`，不得使用系统 Python（系统 Python 版本可能更高，会掩盖兼容性问题）
+- **验证必须覆盖所有改动文件**：语法检查和导入测试必须包含本次改动涉及的所有 `.py` 文件，不能只跑固定列表
+
 ## 项目概述
 
 SchemaFlow 是一个 Web 自动化编排平台，支持双模式驱动：前端拖拽连线的 RPA 模式，以及大模型通过 Function Calling 自动组装的 Agent 模式。后端运行 Playwright 浏览器实例，通过 WebSocket 将执行状态和实时截图推送到前端。
@@ -100,22 +106,24 @@ git tag v{版本号}
 完成任务后必须执行以下验证，全部通过后方可提交：
 
 ```bash
-# 1. 后端语法检查
-cd backend && python -c "
-import py_compile
-for f in ['engine/context.py','engine/executor.py','api/execution.py',
-          'engine/actions/base.py','engine/actions/browser.py',
-          'engine/actions/data.py','engine/actions/control.py']:
+# 1. 后端语法检查（必须使用 venv Python）
+cd backend && .venv/bin/python -c "
+import py_compile, glob
+for f in glob.glob('**/*.py', recursive=True):
+    if '.venv' in f:
+        continue
     py_compile.compile(f, doraise=True)
     print(f'OK: {f}')
 "
 
-# 2. 后端模块导入测试
-cd backend && python -c "
+# 2. 后端模块导入测试（必须使用 venv Python）
+cd backend && .venv/bin/python -c "
 import sys; sys.path.insert(0,'.')
+from config import get_settings
 from engine.actions import base, browser, data, control
 from engine.executor import WorkflowExecutor
 from api.websocket import manager
+from repository import get_execution_repo
 print('所有模块导入成功')
 "
 
