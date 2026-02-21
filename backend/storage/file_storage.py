@@ -1,6 +1,8 @@
 """基于本地 JSON 文件的存储实现。"""
 import aiofiles
 import json
+import os
+import tempfile
 import uuid
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -31,22 +33,34 @@ class JSONFileStorage(StorageBase):
         self._ensure_index()
 
     def _ensure_index(self):
-        """确保索引文件存在。"""
+        """确保索引文件存在（同步初始化）。"""
         if not self.index_file.exists():
-            self._write_index({})
+            with open(self.index_file, 'w', encoding='utf-8') as f:
+                json.dump({}, f, indent=2, ensure_ascii=False)
 
-    def _read_index(self) -> Dict[str, Dict]:
-        """读取索引。"""
+    async def _read_index(self) -> Dict[str, Dict]:
+        """异步读取索引文件。"""
+        if not self.index_file.exists():
+            return {}
         try:
-            with open(self.index_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
+            async with aiofiles.open(self.index_file, 'r', encoding='utf-8') as f:
+                content = await f.read()
+                return json.loads(content)
+        except json.JSONDecodeError:
             return {}
 
-    def _write_index(self, index: Dict[str, Dict]):
-        """写入索引。"""
-        with open(self.index_file, 'w', encoding='utf-8') as f:
-            json.dump(index, f, indent=2, ensure_ascii=False)
+    async def _write_index(self, index: Dict[str, Dict]):
+        """原子写入索引文件。"""
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=str(self.index_file.parent), suffix='.tmp')
+        try:
+            async with aiofiles.open(tmp_path, 'w', encoding='utf-8') as f:
+                await f.write(json.dumps(index, indent=2, ensure_ascii=False))
+            os.replace(tmp_path, str(self.index_file))
+        except Exception:
+            os.unlink(tmp_path)
+            raise
+        finally:
+            os.close(tmp_fd)
 
     def _workflow_path(self, workflow_id: str) -> Path:
         """获取工作流文件路径。"""
@@ -83,7 +97,7 @@ class JSONFileStorage(StorageBase):
             await f.write(json.dumps(workflow, indent=2, ensure_ascii=False))
 
         # 更新索引
-        index = self._read_index()
+        index = await self._read_index()
         index[workflow_id] = {
             "id": workflow_id,
             "name": workflow.get("name", ""),
@@ -91,7 +105,7 @@ class JSONFileStorage(StorageBase):
             "created_at": workflow.get("created_at"),
             "updated_at": now
         }
-        self._write_index(index)
+        await self._write_index(index)
 
         return workflow_id
 
@@ -122,7 +136,7 @@ class JSONFileStorage(StorageBase):
         Returns:
             工作流列表
         """
-        index = self._read_index()
+        index = await self._read_index()
         workflows = list(index.values())
 
         # 按更新时间倒序
@@ -145,10 +159,10 @@ class JSONFileStorage(StorageBase):
             workflow_path.unlink()
 
         # 更新索引
-        index = self._read_index()
+        index = await self._read_index()
         if workflow_id in index:
             del index[workflow_id]
-            self._write_index(index)
+            await self._write_index(index)
             return True
         return False
 
