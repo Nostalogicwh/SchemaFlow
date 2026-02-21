@@ -141,10 +141,12 @@ class WorkflowExecutor:
                 from config import get_settings
                 cdp_url = get_settings()["browser"]["cdp_url"]
                 context.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
-                # CDP 连接返回的 Browser 至少有一个默认 context
                 default_context = context.browser.contexts[0]
-                # 优先复用已有的非空白页面，保留 sessionStorage 等登录态
+                await context.log("info", f"CDP 连接成功，contexts 数量: {len(context.browser.contexts)}")
                 existing_pages = default_context.pages
+                await context.log("info", f"已有页面数量: {len(existing_pages)}")
+                for i, p in enumerate(existing_pages):
+                    await context.log("info", f"  页面 {i}: {p.url}")
                 reused = None
                 for p in existing_pages:
                     if p.url and p.url != "about:blank":

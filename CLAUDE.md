@@ -4,6 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 关键约束
 
+- **版本开发必须在分支进行**：任何小版本开发前，先创建 `dev/v{版本号}` 分支（如 `dev/v0.2.3`），完成后合并回 main
 - **Python 3.9**：后端运行在 Python 3.9 环境下。禁止 `X | Y` 类型联合（用 `Optional[X]` 或 `Union[X, Y]`），禁止 `match/case`
 - **验证必须使用 venv Python**：`backend/.venv/bin/python`，不得使用系统 Python
 - **验证必须覆盖所有改动文件**：语法检查和导入测试必须包含本次改动涉及的所有 `.py` 文件
@@ -111,6 +112,29 @@ frontend/src/
 - `useWebSocket.ts` 中 `startExecution` 参数可能收到 React 事件对象，需做类型守卫
 - CDP 模式下复用已有页面不关闭，新建的页面才在 cleanup 时关闭
 - `@` 路径别名映射到 `frontend/src/`（vite.config.ts + tsconfig.app.json）
+
+### CDP 模式启动 Chrome
+
+使用 CDP 模式复用本地浏览器登录态时，Chrome 必须同时指定调试端口和用户数据目录：
+
+```bash
+# macOS
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/Library/Application Support/Google/Chrome"
+
+# Linux
+google-chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/.config/google-chrome"
+
+# Windows
+"C:\Program Files\Google\Chrome\Application\chrome.exe" ^
+  --remote-debugging-port=9222 ^
+  --user-data-dir="%LOCALAPPDATA%\Google\Chrome\User Data"
+```
+
+**注意**：不指定 `--user-data-dir` 时，Chrome 会以临时 profile 启动，不包含任何登录态。
 
 ## 配置
 

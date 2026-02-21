@@ -89,6 +89,10 @@ async def generate_workflow(request: GenerateRequest):
         logger.error("解析 LLM 响应失败 - 原始内容: %s", result[:500])
         raise HTTPException(status_code=500, detail=f"解析生成结果失败: {e}")
 
+    # 校验并注入 start/end 节点
+    workflow_data = validate_workflow_data(workflow_data)
+    workflow_data = inject_start_end_nodes(workflow_data)
+
     return GenerateResponse(
         nodes=workflow_data.get("nodes", []),
         edges=workflow_data.get("edges", []),
@@ -105,7 +109,7 @@ async def call_llm(system_prompt: str, user_prompt: str, model: str = None) -> s
     base_url = llm_cfg.get("base_url", "https://api.deepseek.com/v1")
     model = model or llm_cfg.get("model", "deepseek-chat")
     temperature = llm_cfg.get("temperature", 0.1)
-    timeout = llm_cfg.get("timeout", 60)
+    timeout = llm_cfg.get("timeout", 120)
 
     if not api_key:
         raise ValueError("未配置 LLM API Key（设置 LLM_API_KEY 环境变量或 settings.toml）")
@@ -144,3 +148,60 @@ def parse_llm_response(content: str) -> Dict[str, Any]:
         text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
 
     return json.loads(text)
+
+
+def validate_workflow_data(workflow_data: Dict[str, Any]) -> Dict[str, Any]:
+    """校验并清理 LLM 生成的工作流数据。
+
+    - 过滤掉缺少 id/type 的节点
+    - 过滤掉 type 未注册的节点（start/end 除外）
+    - 过滤掉引用了不存在节点的 edge
+    """
+    registered_types = {s["name"] for s in registry.get_all_schemas()}
+    registered_types.update({"start", "end"})
+
+    nodes = workflow_data.get("nodes", [])
+    edges = workflow_data.get("edges", [])
+
+    valid_nodes = []
+    for node in nodes:
+        if not node.get("id") or not node.get("type"):
+            logger.warning("过滤无效节点（缺少 id 或 type）: %s", node)
+            continue
+        if node["type"] not in registered_types:
+            logger.warning("过滤未注册节点类型: %s", node["type"])
+            continue
+        valid_nodes.append(node)
+
+    valid_node_ids = {n["id"] for n in valid_nodes}
+    valid_edges = []
+    for edge in edges:
+        if edge.get("source") in valid_node_ids and edge.get("target") in valid_node_ids:
+            valid_edges.append(edge)
+        else:
+            logger.warning("过滤无效连线: %s -> %s", edge.get("source"), edge.get("target"))
+
+    return {"nodes": valid_nodes, "edges": valid_edges}
+
+
+def inject_start_end_nodes(workflow_data: Dict[str, Any]) -> Dict[str, Any]:
+    """注入 start/end 节点及首尾连线。"""
+    nodes = workflow_data.get("nodes", [])
+    edges = workflow_data.get("edges", [])
+
+    if not nodes:
+        return workflow_data
+
+    start_node = {"id": "start_1", "type": "start", "label": "开始", "config": {}}
+    end_node = {"id": "end_1", "type": "end", "label": "结束", "config": {}}
+
+    first_node_id = nodes[0]["id"]
+    last_node_id = nodes[-1]["id"]
+
+    nodes.insert(0, start_node)
+    nodes.append(end_node)
+
+    edges.insert(0, {"source": "start_1", "target": first_node_id})
+    edges.append({"source": last_node_id, "target": "end_1"})
+
+    return {"nodes": nodes, "edges": edges}
