@@ -72,7 +72,8 @@ class WorkflowExecutor:
         workflow: Dict[str, Any],
         websocket=None,
         browser=None,
-        execution_id: str = None
+        execution_id: str = None,
+        headless: bool = True
     ) -> ExecutionContext:
         """执行工作流。
 
@@ -99,7 +100,7 @@ class WorkflowExecutor:
             self.active_executions[execution_id] = context
 
         try:
-            await self._run_workflow(context, workflow)
+            await self._run_workflow(context, workflow, headless=headless)
         except Exception as e:
             context.status = ExecutionStatus.FAILED
             context.error = str(e)
@@ -120,7 +121,7 @@ class WorkflowExecutor:
 
         return context
 
-    async def _run_workflow(self, context: ExecutionContext, workflow: Dict[str, Any]):
+    async def _run_workflow(self, context: ExecutionContext, workflow: Dict[str, Any], headless: bool = True):
         """实际执行逻辑。
 
         Args:
@@ -146,7 +147,7 @@ class WorkflowExecutor:
             except Exception:
                 # 降级：启动独立浏览器（无登录态）
                 context.browser = await self.playwright.chromium.launch(
-                    headless=False
+                    headless=headless
                 )
                 context.page = await context.browser.new_page()
                 context._is_cdp = False

@@ -51,6 +51,8 @@ async def execution_websocket(
             if message_type == "start_execution":
                 # 启动工作流执行
                 workflow_id = data.get("workflow_id")
+                mode = data.get("mode", "headless")  # headless | headed
+                headless = mode != "headed"
                 if workflow_id:
                     from storage.file_storage import JSONFileStorage
                     storage = JSONFileStorage()
@@ -63,7 +65,8 @@ async def execution_websocket(
                             bg_executor.execute(
                                 workflow,
                                 websocket,
-                                execution_id=execution_id
+                                execution_id=execution_id,
+                                headless=headless
                             )
                         )
                     else:

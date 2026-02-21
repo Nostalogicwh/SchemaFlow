@@ -13,6 +13,7 @@ function App() {
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null)
   const [currentWorkflow, setCurrentWorkflow] = useState<Workflow | null>(null)
   const [showExecution, setShowExecution] = useState(false)
+  const [executionMode, setExecutionMode] = useState<'headless' | 'headed'>('headless')
 
   const {
     isConnected,
@@ -79,11 +80,11 @@ function App() {
       connect(execution_id, selectedWorkflowId)
       setShowExecution(true)
       // 连接后自动开始执行
-      setTimeout(() => startExecution(selectedWorkflowId), 500)
+      setTimeout(() => startExecution(selectedWorkflowId, executionMode), 500)
     } catch (error) {
       console.error('执行工作流失败:', error)
     }
-  }, [selectedWorkflowId, connect, startExecution])
+  }, [selectedWorkflowId, connect, startExecution, executionMode])
 
   return (
     <div className="h-screen flex flex-col bg-gray-100">
@@ -94,6 +95,14 @@ function App() {
           {currentWorkflow && (
             <>
               <span className="text-sm text-gray-600">{currentWorkflow.name}</span>
+              <select
+                value={executionMode}
+                onChange={(e) => setExecutionMode(e.target.value as 'headless' | 'headed')}
+                className="px-2 py-1 text-sm border border-gray-300 rounded bg-white"
+              >
+                <option value="headless">后台执行</option>
+                <option value="headed">前台执行</option>
+              </select>
               <button
                 onClick={handleExecute}
                 className="px-4 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600"
