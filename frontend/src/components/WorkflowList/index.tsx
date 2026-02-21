@@ -9,9 +9,10 @@ interface WorkflowListProps {
   selectedId: string | null
   onSelect: (id: string) => void
   onCreate: () => void
+  refreshKey?: number
 }
 
-export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListProps) {
+export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: WorkflowListProps) {
   const [workflows, setWorkflows] = useState<WorkflowListItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -30,7 +31,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
 
   useEffect(() => {
     loadWorkflows()
-  }, [])
+  }, [refreshKey])
 
   // 删除工作流
   const handleDelete = async (id: string, e: React.MouseEvent) => {

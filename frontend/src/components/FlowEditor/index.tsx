@@ -1,12 +1,14 @@
 /**
  * 可视化工作流编辑器
  */
-import { useCallback, useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
+  ReactFlowProvider,
+  useReactFlow,
   addEdge,
   useNodesState,
   useEdgesState,
@@ -45,7 +47,7 @@ function workflowToFlow(workflow: Workflow): { nodes: FlowNode[]; edges: Edge[] 
   const nodes: FlowNode[] = workflow.nodes.map((node, index) => ({
     id: node.id,
     type: node.type,
-    position: { x: 100 + index * 200, y: 100 + (index % 2) * 100 },
+    position: node.position ?? { x: 100 + index * 200, y: 100 + (index % 2) * 100 },
     data: {
       label: node.type,
       category: nodeCategoryMap[node.type] || 'base',
@@ -74,6 +76,7 @@ function flowToWorkflow(
     id: node.id,
     type: node.type!,
     config: node.data.config || {},
+    position: { x: node.position.x, y: node.position.y },
   }))
 
   const workflowEdges: WorkflowEdge[] = edges.map((edge) => ({
@@ -89,13 +92,20 @@ function flowToWorkflow(
   }
 }
 
-export function FlowEditor({ workflow, nodeStatuses = {}, onSave }: FlowEditorProps) {
+export function FlowEditor(props: FlowEditorProps) {
+  return (
+    <ReactFlowProvider>
+      <FlowEditorInner {...props} />
+    </ReactFlowProvider>
+  )
+}
+
+function FlowEditorInner({ workflow, nodeStatuses = {}, onSave }: FlowEditorProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null)
   const [actions, setActions] = useState<ActionMetadata[]>([])
-  const reactFlowWrapper = useRef<HTMLDivElement>(null)
-  const nodeIdCounter = useRef(1)
+  const { screenToFlowPosition } = useReactFlow()
 
   // 加载节点元数据
   useEffect(() => {
@@ -108,7 +118,6 @@ export function FlowEditor({ workflow, nodeStatuses = {}, onSave }: FlowEditorPr
       const { nodes: flowNodes, edges: flowEdges } = workflowToFlow(workflow)
       setNodes(flowNodes)
       setEdges(flowEdges)
-      nodeIdCounter.current = flowNodes.length + 1
     }
   }, [workflow, setNodes, setEdges])
 
@@ -177,16 +186,14 @@ export function FlowEditor({ workflow, nodeStatuses = {}, onSave }: FlowEditorPr
       if (!data) return
 
       const action: ActionMetadata = JSON.parse(data)
-      const bounds = reactFlowWrapper.current?.getBoundingClientRect()
-      if (!bounds) return
 
-      const position = {
-        x: event.clientX - bounds.left,
-        y: event.clientY - bounds.top,
-      }
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      })
 
       const newNode: FlowNode = {
-        id: `node_${nodeIdCounter.current++}`,
+        id: `node_${action.name}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         type: action.name,
         position,
         data: {
@@ -199,7 +206,7 @@ export function FlowEditor({ workflow, nodeStatuses = {}, onSave }: FlowEditorPr
 
       setNodes((nds) => [...nds, newNode])
     },
-    [setNodes]
+    [setNodes, screenToFlowPosition]
   )
 
   // AI 编排：将生成的节点和连线添加到画布
@@ -231,7 +238,6 @@ export function FlowEditor({ workflow, nodeStatuses = {}, onSave }: FlowEditorPr
 
       setNodes((nds) => [...nds, ...newNodes])
       setEdges((eds) => [...eds, ...newEdges])
-      nodeIdCounter.current += aiNodes.length
     },
     [setNodes, setEdges]
   )
@@ -251,7 +257,7 @@ export function FlowEditor({ workflow, nodeStatuses = {}, onSave }: FlowEditorPr
       </div>
 
       {/* 中间画布 */}
-      <div className="flex-1 h-full" ref={reactFlowWrapper} style={{ minHeight: '400px' }}>
+      <div className="flex-1 h-full" style={{ minHeight: '400px' }}>
         <ReactFlow
           nodes={nodes}
           edges={edges}

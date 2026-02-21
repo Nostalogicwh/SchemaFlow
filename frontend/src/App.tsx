@@ -14,6 +14,7 @@ function App() {
   const [currentWorkflow, setCurrentWorkflow] = useState<Workflow | null>(null)
   const [showExecution, setShowExecution] = useState(false)
   const [executionMode, setExecutionMode] = useState<'headless' | 'headed'>('headless')
+  const [listVersion, setListVersion] = useState(0)
 
   const {
     isConnected,
@@ -54,10 +55,7 @@ function App() {
       })
       setSelectedWorkflowId(workflow.id)
       setCurrentWorkflow(workflow)
-    } catch (error) {
-      console.error('创建工作流失败:', error)
-    }
-  }, [])
+      setListVersion(v => v + 1)
 
   // 保存工作流
   const handleSaveWorkflow = useCallback(async (workflow: Workflow) => {
@@ -132,6 +130,7 @@ function App() {
             selectedId={selectedWorkflowId}
             onSelect={handleSelectWorkflow}
             onCreate={handleCreateWorkflow}
+            refreshKey={listVersion}
           />
         </aside>
 

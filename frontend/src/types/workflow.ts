@@ -38,6 +38,7 @@ export interface WorkflowNode {
   id: string
   type: string
   config: Record<string, unknown>
+  position?: { x: number; y: number }
   meta?: {
     generated_by?: 'manual' | 'ai' | 'recorded'
     original_prompt?: string
