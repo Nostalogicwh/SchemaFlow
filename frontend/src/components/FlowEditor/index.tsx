@@ -102,7 +102,6 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
   const [actions, setActions] = useState<ActionMetadata[]>([])
   const [showPanel, setShowPanel] = useState(true)
   const [showMiniMap, setShowMiniMap] = useState(true)
-  const [isMobile, setIsMobile] = useState(false)
   const { screenToFlowPosition } = useReactFlow()
 
   const storeNodeStatuses = useExecutionStore((state) => state.executionState.nodeStatuses)
@@ -113,20 +112,6 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
 
   useEffect(() => {
     actionApi.list().then(setActions).catch(console.error)
-  }, [])
-
-  useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 768
-      setIsMobile(mobile)
-      if (mobile) {
-        setShowMiniMap(false)
-        setShowPanel(false)
-      }
-    }
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
   useEffect(() => {
@@ -258,7 +243,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
 
   return (
     <div className="flex h-full relative">
-      <div className={`border-r bg-white shrink-0 transition-all duration-300 ${isMobile ? 'hidden' : 'w-48'}`}>
+      <div className="border-r bg-white shrink-0 w-48">
         <Toolbar actions={actions} onAIGenerate={handleAIGenerate} />
       </div>
 
@@ -278,27 +263,13 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
         >
           <Background />
           <Controls showInteractive={false} />
-          {showMiniMap && !isMobile && <MiniMap />}
+          {showMiniMap && <MiniMap />}
         </ReactFlow>
-        {isMobile && (
-          <button
-            onClick={() => setShowMiniMap(!showMiniMap)}
-            className="absolute bottom-16 left-2 z-10 px-2 py-1 bg-white border rounded shadow text-xs hover:bg-gray-50"
-          >
-            {showMiniMap ? '隐藏地图' : '显示地图'}
-          </button>
-        )}
       </div>
 
       <div
         className={`border-l bg-white overflow-y-auto shrink-0 transition-all duration-300 ${
-          isMobile
-            ? showPanel
-              ? 'fixed right-0 top-12 bottom-0 w-72 z-20'
-              : 'hidden'
-            : showPanel
-              ? 'w-72 lg:w-80'
-              : 'w-0 overflow-hidden'
+          showPanel ? 'w-80' : 'w-0 overflow-hidden'
         }`}
       >
         {showPanel && (
@@ -314,14 +285,6 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
                     保存
                   </button>
                 )}
-                {isMobile && (
-                  <button
-                    onClick={() => setShowPanel(false)}
-                    className="p-1 hover:bg-gray-100 rounded"
-                  >
-                    ✕
-                  </button>
-                )}
               </div>
             </div>
             <NodePanel
@@ -332,15 +295,6 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
           </>
         )}
       </div>
-
-      {isMobile && selectedNode && !showPanel && (
-        <button
-          onClick={() => setShowPanel(true)}
-          className="absolute right-2 top-2 z-10 px-3 py-1.5 bg-blue-500 text-white text-sm rounded shadow hover:bg-blue-600"
-        >
-          属性
-        </button>
-      )}
     </div>
   )
 }

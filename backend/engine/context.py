@@ -10,6 +10,26 @@ import base64
 from .constants import NodeStatus, WSMessageType
 
 
+def create_llm_client():
+    """创建 OpenAI 客户端实例。"""
+    try:
+        from openai import OpenAI
+        from config import get_settings
+
+        llm_cfg = get_settings().get("llm", {})
+        api_key = llm_cfg.get("api_key")
+        base_url = llm_cfg.get("base_url")
+
+        if not api_key:
+            return None
+
+        return OpenAI(api_key=api_key, base_url=base_url)
+    except ImportError:
+        return None
+    except Exception:
+        return None
+
+
 class ExecutionStatus(str, Enum):
     """执行状态枚举。"""
     PENDING = "pending"
@@ -110,6 +130,16 @@ class ExecutionContext:
         # 用户输入控制（延迟创建 Event 以确保在有事件循环的上下文中）
         self._user_input_event: Optional[asyncio.Event] = None
         self._user_input_response: Optional[str] = None
+
+        # LLM 客户端
+        self.llm_client = create_llm_client()
+        llm_cfg = None
+        try:
+            from config import get_settings
+            llm_cfg = get_settings().get("llm", {})
+        except Exception:
+            pass
+        self.llm_model = llm_cfg.get("model", "deepseek-chat") if llm_cfg else "deepseek-chat"
 
     async def send_screenshot(self):
         """发送截图到前端。"""

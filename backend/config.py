@@ -1,11 +1,26 @@
 """统一配置管理 - 加载 settings.toml，支持 settings.local.toml 覆盖和环境变量优先。"""
 import os
+import sys
 from pathlib import Path
 
 try:
     import tomllib  # Python 3.11+
 except ModuleNotFoundError:
-    import tomli as tomllib  # Python 3.9/3.10
+    try:
+        import tomli as tomllib  # Python 3.9/3.10
+    except ModuleNotFoundError:
+        print("错误: 未找到 TOML 解析库", file=sys.stderr)
+        print(f"当前 Python 版本: {sys.version}", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("请确保在虚拟环境中运行后端:", file=sys.stderr)
+        print("  cd backend && source .venv/bin/activate && python main.py", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("或者使用启动脚本:", file=sys.stderr)
+        print("  cd backend && bash start.sh", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("如果虚拟环境不存在，请先运行:", file=sys.stderr)
+        print("  cd backend && bash setup.sh", file=sys.stderr)
+        sys.exit(1)
 
 _BASE_DIR = Path(__file__).parent
 _settings: dict = None
