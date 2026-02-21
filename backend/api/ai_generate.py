@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/ai", tags=["ai"])
 class GenerateRequest(BaseModel):
     """工作流生成请求。"""
     prompt: str                          # 自然语言描述
-    model: str = "deepseek-chat"         # 使用的模型
+    model: Optional[str] = None          # 模型（None 时使用配置文件中的值）
     existing_nodes: Optional[List[Dict[str, Any]]] = None  # 已有节点（用于追加编排）
 
 
