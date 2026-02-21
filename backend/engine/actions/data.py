@@ -1,7 +1,7 @@
 """数据操作节点 - 提取、复制、粘贴等。"""
 from typing import Dict, Any
 from ..actions import register_action
-from .utils import resolve_variables
+from .utils import resolve_variables, locate_element
 
 
 @register_action(
@@ -103,9 +103,13 @@ async def copy_to_clipboard_action(context: Any, config: Dict[str, Any]) -> Dict
             "selector": {
                 "type": "string",
                 "description": "CSS 选择器"
+            },
+            "ai_target": {
+                "type": "string",
+                "description": "AI 定位目标描述（当 selector 不存在时使用）"
             }
         },
-        "required": ["selector"]
+        "required": []
     },
     inputs=["flow"],
     outputs=["flow"]
@@ -121,15 +125,17 @@ async def paste_from_clipboard_action(context: Any, config: Dict[str, Any]) -> D
         执行结果
     """
     selector = config.get("selector")
+    ai_target = config.get("ai_target")
     text = context.clipboard or ""
 
-    await context.log("info", f"粘贴到 {selector}: {text[:50]}...")
+    if not selector and not ai_target:
+        raise ValueError("paste_from_clipboard 节点需要 selector 或 ai_target 参数")
 
-    await context.page.fill(selector, "")
+    target_desc = selector or ai_target
+    await context.log("info", f"粘贴到 {target_desc}: {text[:50]}...")
 
-    element = await context.page.query_selector(selector)
-    if element:
-        await element.fill(text)
+    locator = await locate_element(context.page, selector, ai_target, context)
+    await locator.fill(text)
 
     return {"value": text}
 
