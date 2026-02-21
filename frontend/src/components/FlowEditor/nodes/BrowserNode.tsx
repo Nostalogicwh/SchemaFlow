@@ -3,19 +3,7 @@
  */
 import { memo } from 'react'
 import { BaseNode, type BaseNodeData } from './BaseNode'
-
-// 浏览器操作图标
-const browserIcons: Record<string, string> = {
-  open_tab: '🌐',
-  navigate: '🔗',
-  click: '👆',
-  input_text: '⌨️',
-  screenshot: '📷',
-  switch_tab: '🔄',
-  close_tab: '❌',
-  select_option: '📋',
-  scroll: '📜',
-}
+import { browserIcons } from '@/constants/nodeStyles'
 
 interface BrowserNodeProps {
   data: BaseNodeData

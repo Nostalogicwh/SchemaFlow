@@ -1,13 +1,16 @@
 """工作流执行器 - 负责工作流的解析和执行。"""
 import asyncio
-import re
 import uuid
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from pathlib import Path
 
 from .context import ExecutionContext, ExecutionStatus
+from .constants import WSMessageType
 from .actions import registry
+from .actions.utils import resolve_variables
+from .browser_manager import BrowserManager
+from .execution_recorder import ExecutionRecorder
 
 
 def topological_sort(nodes: List[Dict], edges: List[Dict]) -> List[str]:
@@ -20,12 +23,10 @@ def topological_sort(nodes: List[Dict], edges: List[Dict]) -> List[str]:
     Returns:
         排序后的节点 ID 列表
     """
-    # 构建邻接表和入度表
     node_ids = {node["id"] for node in nodes}
     adj = {node_id: [] for node_id in node_ids}
     in_degree = {node_id: 0 for node_id in node_ids}
 
-    # 构建图
     for edge in edges:
         source = edge.get("source")
         target = edge.get("target")
@@ -33,7 +34,6 @@ def topological_sort(nodes: List[Dict], edges: List[Dict]) -> List[str]:
             adj[source].append(target)
             in_degree[target] += 1
 
-    # Kahn 算法
     queue = [node_id for node_id, degree in in_degree.items() if degree == 0]
     result = []
 
@@ -56,34 +56,26 @@ class WorkflowExecutor:
     """
 
     def __init__(self, action_registry=None, data_dir: Path = None):
-        """初始化执行器。
-
-        Args:
-            action_registry: 动作注册表
-            data_dir: 数据目录
-        """
         self.registry = action_registry or registry
         self.data_dir = data_dir or Path("./data")
         self.active_executions: Dict[str, ExecutionContext] = {}
-        self._lock = asyncio.Lock()
+        self._lock: Optional[asyncio.Lock] = None
+
+    def _get_lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     async def execute(
         self,
         workflow: Dict[str, Any],
         websocket=None,
-        browser=None
+        browser=None,
+        execution_id: str = None,
+        headless: bool = True
     ) -> ExecutionContext:
-        """执行工作流。
-
-        Args:
-            workflow: 工作流配置
-            websocket: WebSocket 连接（可选）
-            browser: 浏览器实例（可选）
-
-        Returns:
-            执行上下文
-        """
-        execution_id = str(uuid.uuid4())
+        if execution_id is None:
+            execution_id = str(uuid.uuid4())
         context = ExecutionContext(
             execution_id=execution_id,
             workflow_id=workflow["id"],
@@ -92,21 +84,20 @@ class WorkflowExecutor:
             data_dir=self.data_dir
         )
 
-        async with self._lock:
+        async with self._get_lock():
             self.active_executions[execution_id] = context
 
         try:
-            await self._run_workflow(context, workflow)
+            await self._run_workflow(context, workflow, headless=headless)
         except Exception as e:
             context.status = ExecutionStatus.FAILED
             context.error = str(e)
-            context.log("error", f"执行失败: {str(e)}")
+            await context.log("error", f"执行失败: {str(e)}")
 
-            # 发送错误消息
             if context.websocket:
                 try:
                     await context.websocket.send_json({
-                        "type": "error",
+                        "type": WSMessageType.ERROR.value,
                         "node_id": context.current_node_id,
                         "message": str(e)
                     })
@@ -117,43 +108,37 @@ class WorkflowExecutor:
 
         return context
 
-    async def _run_workflow(self, context: ExecutionContext, workflow: Dict[str, Any]):
-        """实际执行逻辑。
-
-        Args:
-            context: 执行上下文
-            workflow: 工作流配置
-        """
+    async def _run_workflow(
+        self,
+        context: ExecutionContext,
+        workflow: Dict[str, Any],
+        headless: bool = True
+    ):
         context.status = ExecutionStatus.RUNNING
         context.start_time = datetime.now()
 
-        # 初始化浏览器
-        if context.browser is None and context.page is None:
-            from playwright.async_api import async_playwright
-            self.playwright = await async_playwright().start()
-            context.browser = await self.playwright.chromium.launch(
-                headless=False  # 有头模式，用户可见
-            )
-            context.page = await context.browser.new_page()
+        browser_mgr = BrowserManager()
+        context._browser_mgr = browser_mgr
+        await browser_mgr.connect(context, headless)
 
-        # 计算执行顺序
-        execution_order = topological_sort(workflow.get("nodes", []), workflow.get("edges", []))
+        execution_order = topological_sort(
+            workflow.get("nodes", []),
+            workflow.get("edges", [])
+        )
 
-        # 构建节点查找表
         nodes_map = {node["id"]: node for node in workflow.get("nodes", [])}
 
-        # 发送开始消息
         if context.websocket:
             await context.websocket.send_json({
-                "type": "execution_started",
+                "type": WSMessageType.EXECUTION_STARTED.value,
                 "execution_id": context.execution_id,
                 "workflow_id": context.workflow_id,
                 "node_order": execution_order
             })
 
-        # 按顺序执行节点
+        recorder = ExecutionRecorder()
+
         for node_id in execution_order:
-            # 检查是否被取消
             if context.status == ExecutionStatus.CANCELLED:
                 break
 
@@ -163,156 +148,101 @@ class WorkflowExecutor:
 
             node_type = node.get("type")
             config = node.get("config", {})
+            node_label = node.get("label", node_type)
 
             context.current_node_id = node_id
 
-            # 发送节点开始消息
+            record = recorder.start_node(node_id, node_type, node_label)
+            context.node_records[node_id] = record
+
             if context.websocket:
                 await context.websocket.send_json({
-                    "type": "node_start",
+                    "type": WSMessageType.NODE_START.value,
                     "node_id": node_id,
                     "node_type": node_type
                 })
 
-            # 获取执行函数
             try:
                 execute_func = self.registry.get_execute_func(node_type)
             except ValueError:
                 raise ValueError(f"未知的节点类型: {node_type}")
 
-            # 变量替换
-            resolved_config = self._resolve_variables(config, context.variables)
+            resolved_config = resolve_variables(config, context.variables)
 
-            # 执行
             try:
                 result = await execute_func(context, resolved_config)
 
-                # 发送节点完成消息
+                recorder.complete_node(record, result, context.logs)
+
                 if context.websocket:
                     await context.websocket.send_json({
-                        "type": "node_complete",
+                        "type": WSMessageType.NODE_COMPLETE.value,
                         "node_id": node_id,
                         "success": True,
-                        "result": result
+                        "result": result,
+                        "record": record.to_dict()
                     })
 
-                # 每个节点后发送截图
                 await context.send_screenshot()
 
             except Exception as e:
-                # 发送节点失败消息
+                recorder.fail_node(record, str(e), context.logs)
+
                 if context.websocket:
                     await context.websocket.send_json({
-                        "type": "node_complete",
+                        "type": WSMessageType.NODE_COMPLETE.value,
                         "node_id": node_id,
                         "success": False,
-                        "error": str(e)
+                        "error": str(e),
+                        "record": record.to_dict()
                     })
-                context.log("error", f"节点 {node_id} 执行失败: {str(e)}")
+                await context.log("error", f"节点 {node_id} 执行失败: {str(e)}")
                 raise
 
         context.status = ExecutionStatus.COMPLETED
         context.end_time = datetime.now()
 
-        # 发送完成消息
         if context.websocket:
             await context.websocket.send_json({
-                "type": "execution_complete",
+                "type": WSMessageType.EXECUTION_COMPLETE.value,
                 "execution_id": context.execution_id,
                 "success": context.status == ExecutionStatus.COMPLETED,
                 "duration": (context.end_time - context.start_time).total_seconds() if context.end_time else 0,
                 "logs": context.logs
             })
 
-    def _resolve_variables(self, config: Any, variables: Dict[str, Any]) -> Any:
-        """解析变量引用 {{variable_name}}。
-
-        Args:
-            config: 原始配置
-            variables: 变量上下文
-
-        Returns:
-            解析后的配置
-        """
-        def resolve_value(value):
-            if isinstance(value, str):
-                # 替换 {{var}} 语法
-                pattern = r'\{\{(\w+)\}\}'
-                matches = list(re.finditer(pattern, value))
-
-                if matches:
-                    result = value
-                    for match in reversed(matches):
-                        var_name = match.group(1)
-                        var_value = str(variables.get(var_name, match.group(0)))
-                        result = result[:match.start()] + var_value + result[match.end():]
-                    return result
-                return value
-            elif isinstance(value, dict):
-                return {k: resolve_value(v) for k, v in value.items()}
-            elif isinstance(value, list):
-                return [resolve_value(v) for v in value]
-            return value
-
-        return resolve_value(config)
+        recorder.sync_to_context(context)
+        await recorder.save(context, workflow)
 
     async def _cleanup(self, context: ExecutionContext):
-        """清理资源。
-
-        Args:
-            context: 执行上下文
-        """
         context.end_time = datetime.now()
 
-        # 关闭浏览器（如果是由执行器创建的）
-        if hasattr(self, 'playwright'):
-            try:
-                await self.playwright.stop()
-            except Exception:
-                pass
+        browser_mgr = getattr(context, '_browser_mgr', None)
+        if browser_mgr:
+            await browser_mgr.cleanup(context)
 
-        # 从活跃执行中移除
-        async with self._lock:
+        async with self._get_lock():
             if context.execution_id in self.active_executions:
                 del self.active_executions[context.execution_id]
 
     async def stop(self, execution_id: str):
-        """停止执行。
-
-        Args:
-            execution_id: 执行 ID
-        """
-        async with self._lock:
+        async with self._get_lock():
             context = self.active_executions.get(execution_id)
             if context:
                 context.status = ExecutionStatus.CANCELLED
                 if context.websocket:
                     try:
                         await context.websocket.send_json({
-                            "type": "execution_cancelled",
+                            "type": WSMessageType.EXECUTION_CANCELLED.value,
                             "execution_id": execution_id
                         })
                     except Exception:
                         pass
 
     async def respond_user_input(self, execution_id: str, response: str):
-        """响应用户输入。
-
-        Args:
-            execution_id: 执行 ID
-            response: 用户响应
-        """
         context = self.active_executions.get(execution_id)
         if context:
             context.respond_user_input(response)
 
     def get_context(self, execution_id: str) -> Optional[ExecutionContext]:
-        """获取执行上下文。
-
-        Args:
-            execution_id: 执行 ID
-
-        Returns:
-            执行上下文
-        """
         return self.active_executions.get(execution_id)

@@ -35,7 +35,7 @@ async def wait_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     import asyncio
 
     seconds = config.get("seconds", 1)
-    context.log("info", f"等待 {seconds} 秒")
+    await context.log("info", f"等待 {seconds} 秒")
     await asyncio.sleep(seconds)
     return {}
 
@@ -76,7 +76,7 @@ async def wait_for_element_action(context: Any, config: Dict[str, Any]) -> Dict[
     selector = config.get("selector")
     timeout = config.get("timeout", 30)
 
-    context.log("info", f"等待元素: {selector} (超时: {timeout}s)")
+    await context.log("info", f"等待元素: {selector} (超时: {timeout}s)")
     await context.page.wait_for_selector(selector, timeout=timeout * 1000)
     return {}
 
@@ -117,7 +117,7 @@ async def user_input_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
     prompt = config.get("prompt", "请完成操作后继续")
     timeout = config.get("timeout", 300)
 
-    context.log("info", f"等待用户输入: {prompt}")
+    await context.log("info", f"等待用户输入: {prompt}")
 
     # 通过 WebSocket 请求用户输入
     if context.websocket:
@@ -125,7 +125,7 @@ async def user_input_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
     else:
         # 无 WebSocket 模式，直接等待
         import asyncio
-        context.log("info", "无 WebSocket 连接，等待 5 秒后继续")
+        await context.log("info", "无 WebSocket 连接，等待 5 秒后继续")
         await asyncio.sleep(5)
 
     return {}

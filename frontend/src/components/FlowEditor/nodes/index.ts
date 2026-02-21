@@ -37,12 +37,15 @@ export const nodeTypes: NodeTypes = {
   copy_to_clipboard: DataNode,
   paste_from_clipboard: DataNode,
   set_variable: DataNode,
+  custom_script: DataNode,
   // 控制节点
   wait: ControlNode,
   wait_for_element: ControlNode,
   user_input: ControlNode,
   // AI 节点
   ai_action: AINode,
+  ai_chat: AINode,
+  ai_extract: AINode,
 }
 
 // 节点分类映射
@@ -62,8 +65,12 @@ export const nodeCategoryMap: Record<string, string> = {
   copy_to_clipboard: 'data',
   paste_from_clipboard: 'data',
   set_variable: 'data',
+  custom_script: 'data',
   wait: 'control',
   wait_for_element: 'control',
   user_input: 'control',
+  // AI 节点
   ai_action: 'ai',
+  ai_chat: 'ai',
+  ai_extract: 'ai',
 }

@@ -8,6 +8,7 @@ import type {
   WSUserInputRequired,
   ExecutionState,
   NodeStatus,
+  NodeExecutionRecord,
 } from '@/types/workflow'
 
 interface UseWebSocketOptions {
@@ -21,6 +22,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
+  const connectRef = useRef<(executionId: string, workflowId?: string) => void>(() => {})
 
   const [isConnected, setIsConnected] = useState(false)
   const [executionState, setExecutionState] = useState<ExecutionState>({
@@ -31,62 +33,11 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     logs: [],
     screenshot: null,
     userInputRequest: null,
+    nodeRecords: [],
   })
 
   // 存储 workflow_id
   const workflowIdRef = useRef<string | null>(null)
-
-  // 连接 WebSocket
-  const connect = useCallback((executionId: string, workflowId?: string) => {
-    // 关闭现有连接
-    if (wsRef.current) {
-      wsRef.current.close()
-    }
-
-    // 保存 workflow_id
-    if (workflowId) {
-      workflowIdRef.current = workflowId
-    }
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    const url = `${protocol}//${host}/api/ws/execution/${executionId}`
-
-    const ws = new WebSocket(url)
-    wsRef.current = ws
-
-    ws.onopen = () => {
-      setIsConnected(true)
-      setExecutionState(prev => ({
-        ...prev,
-        executionId,
-        isRunning: true,
-      }))
-    }
-
-    ws.onclose = () => {
-      setIsConnected(false)
-      if (autoReconnect && executionState.isRunning) {
-        reconnectTimerRef.current = window.setTimeout(() => {
-          connect(executionId)
-        }, reconnectInterval)
-      }
-    }
-
-    ws.onerror = (error) => {
-      console.error('WebSocket 错误:', error)
-    }
-
-    ws.onmessage = (event) => {
-      try {
-        const message: WSMessage = JSON.parse(event.data)
-        handleMessage(message)
-        onMessage?.(message)
-      } catch (e) {
-        console.error('解析 WebSocket 消息失败:', e)
-      }
-    }
-  }, [autoReconnect, reconnectInterval, onMessage, executionState.isRunning])
 
   // 处理消息
   const handleMessage = useCallback((message: WSMessage) => {
@@ -97,6 +48,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
           isRunning: true,
           nodeStatuses: {},
           logs: [],
+          nodeRecords: [],
         }))
         break
 
@@ -113,12 +65,16 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
       case 'node_complete': {
         const status: NodeStatus = message.success ? 'completed' : 'failed'
+        const record = message.record as NodeExecutionRecord | undefined
         setExecutionState(prev => ({
           ...prev,
           nodeStatuses: {
             ...prev.nodeStatuses,
             [message.node_id as string]: status,
           },
+          nodeRecords: record
+            ? [...prev.nodeRecords, record]
+            : prev.nodeRecords,
         }))
         break
       }
@@ -171,6 +127,63 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     }
   }, [])
 
+  // 连接 WebSocket
+  const connect = useCallback((executionId: string, workflowId?: string) => {
+    // 关闭现有连接
+    if (wsRef.current) {
+      wsRef.current.close()
+    }
+
+    // 保存 workflow_id
+    if (workflowId) {
+      workflowIdRef.current = workflowId
+    }
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const url = `${protocol}//${host}/api/ws/execution/${executionId}`
+
+    const ws = new WebSocket(url)
+    wsRef.current = ws
+
+    ws.onopen = () => {
+      setIsConnected(true)
+      setExecutionState(prev => ({
+        ...prev,
+        executionId,
+        isRunning: true,
+      }))
+    }
+
+    ws.onclose = () => {
+      setIsConnected(false)
+      if (autoReconnect && executionState.isRunning) {
+        reconnectTimerRef.current = window.setTimeout(() => {
+          connectRef.current(executionId)
+        }, reconnectInterval)
+      }
+    }
+
+    ws.onerror = (error) => {
+      console.error('WebSocket 错误:', error)
+    }
+
+    ws.onmessage = (event) => {
+      try {
+        const message: WSMessage = JSON.parse(event.data)
+        handleMessage(message)
+        onMessage?.(message)
+      } catch (e) {
+        console.error('解析 WebSocket 消息失败:', e)
+      }
+    }
+  }, [autoReconnect, reconnectInterval, onMessage, executionState.isRunning, handleMessage])
+
+  // 保持 connectRef 同步
+  useEffect(() => {
+    connectRef.current = connect
+  }, [connect])
+
   // 发送消息
   const send = useCallback((message: WSMessage) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -179,10 +192,11 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   }, [])
 
   // 开始执行
-  const startExecution = useCallback((workflowId?: string) => {
-    const wfId = workflowId || workflowIdRef.current
+  const startExecution = useCallback((workflowId?: string, mode: 'headless' | 'headed' = 'headless') => {
+    // 防止 React 事件对象被当作 workflowId 传入（从 onClick 直接调用时）
+    const wfId = (typeof workflowId === 'string' ? workflowId : null) || workflowIdRef.current
     if (wfId) {
-      send({ type: 'start_execution', workflow_id: wfId })
+      send({ type: 'start_execution', workflow_id: wfId, mode })
     } else {
       console.error('startExecution: 缺少 workflow_id')
     }
@@ -232,6 +246,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       logs: [],
       screenshot: null,
       userInputRequest: null,
+      nodeRecords: [],
     })
   }, [])
 

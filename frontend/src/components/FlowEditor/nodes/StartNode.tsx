@@ -4,13 +4,7 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import type { NodeStatus } from '@/types/workflow'
-
-const statusStyles: Record<NodeStatus, string> = {
-  idle: '',
-  running: 'ring-2 ring-blue-500 ring-offset-2 animate-pulse',
-  completed: 'ring-2 ring-green-500 ring-offset-2',
-  failed: 'ring-2 ring-red-500 ring-offset-2',
-}
+import { statusStyles } from '@/constants/nodeStyles'
 
 interface StartNodeData {
   label?: string

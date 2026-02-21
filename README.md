@@ -9,12 +9,13 @@ SchemaFlow 是一个轻量级的 Web 自动化平台，具有以下核心特性�
 - **双模式驱动**：既支持前端手动拖拽连线（RPA 模式），也支持大模型通过 Function Calling 自动推导组装（Agent 模式）
 - **实时观测**：服务端负责运行浏览器内核，通过 WebSocket 将执行日志和实时画面推送到前端
 - **极简架构**：使用本地 JSON 文件存储，无需数据库和消息队列
+- **纯 PC 应用**：专为桌面端浏览器设计，不支持移动端
 
 ## 技术栈
 
 | 组件 | 技术 |
 |------|------|
-| 前端 | React + ReactFlow + TypeScript |
+| 前端 | React + ReactFlow + TypeScript（纯 PC 应用） |
 | 后端 | FastAPI + Python 3.10+ |
 | 执行层 | Playwright |
 | 存储 | 本地 JSON 文件（预留数据库接口） |
@@ -48,6 +49,26 @@ SchemaFlow/
 ```bash
 cd backend
 
+# 初始化环境（创建虚拟环境并安装依赖）
+bash setup.sh
+
+# 启动服务
+bash start.sh
+```
+
+服务将在 `http://localhost:8000` 启动。
+
+**或者手动执行：**
+
+```bash
+cd backend
+
+# 创建虚拟环境（仅首次需要）
+python3 -m venv .venv
+
+# 激活虚拟环境
+source .venv/bin/activate
+
 # 安装依赖
 pip install -r requirements.txt
 
@@ -58,14 +79,21 @@ playwright install chromium
 python main.py
 ```
 
-服务将在 `http://localhost:8000` 启动。
+### 前端
 
-### 测试页面
+```bash
+cd frontend
 
-在浏览器中打开 `frontend/test.html`，可以：
-- 查看所有可用节点
-- 创建和执行测试工作流
-- 实时查看执行状态和截图
+# 安装依赖
+npm install
+
+# 启动开发服务器
+npm run dev
+```
+
+前端将在 `http://localhost:3000` 启动。
+
+**注意**：本应用为纯 PC 应用，建议在桌面端浏览器（Chrome、Firefox、Edge 等）中使用，不支持移动端。
 
 ## API 接口
 

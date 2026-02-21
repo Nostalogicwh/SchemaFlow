@@ -1,5 +1,5 @@
 """动作注册表 - 管理所有工作流节点。"""
-from typing import Dict, Callable, Any, List
+from typing import Dict, Callable, Any, List, Optional
 from pydantic import BaseModel
 
 
@@ -37,7 +37,7 @@ class ActionRegistry:
             "execute": execute_func
         }
 
-    def get(self, name: str) -> Dict[str, Any] | None:
+    def get(self, name: str) -> Optional[Dict[str, Any]]:
         """获取动作定义。
 
         Args:
@@ -55,6 +55,24 @@ class ActionRegistry:
             元数据列表
         """
         return [action["metadata"].model_dump() for action in self._actions.values()]
+
+    def get_all_schemas(self) -> List[Dict[str, Any]]:
+        """导出所有 action 的精简 schema（供 LLM 生成工作流使用）。
+
+        Returns:
+            包含 name、label、description、category、parameters 的列表
+        """
+        return [
+            {
+                "name": action["metadata"].name,
+                "label": action["metadata"].label,
+                "description": action["metadata"].description,
+                "category": action["metadata"].category,
+                "parameters": action["metadata"].parameters,
+            }
+            for action in self._actions.values()
+            if action["metadata"].category != "base"  # 排除 start/end
+        ]
 
     def get_execute_func(self, name: str) -> Callable:
         """获取执行函数。

@@ -4,6 +4,7 @@
 import { useCallback } from 'react'
 import type { Node } from '@xyflow/react'
 import type { ActionMetadata, JsonSchemaProperty } from '@/types/workflow'
+import { EmptyState } from '@/components/common'
 
 interface NodePanelProps {
   selectedNode: Node | null
@@ -27,9 +28,11 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode }: NodePa
 
   if (!selectedNode) {
     return (
-      <div className="p-4 text-gray-500 text-center">
-        <p>选择一个节点查看属性</p>
-      </div>
+      <EmptyState
+        icon="👆"
+        title="未选中节点"
+        description="点击画布中的节点查看和编辑属性"
+      />
     )
   }
 
@@ -37,7 +40,11 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode }: NodePa
     return (
       <div className="p-4">
         <h3 className="font-bold text-lg mb-2">{selectedNode.type}</h3>
-        <p className="text-gray-500">无可配置参数</p>
+        <EmptyState
+          icon="⚙️"
+          title="无可配置参数"
+          description="此节点类型没有可配置的参数"
+        />
       </div>
     )
   }
@@ -151,6 +158,12 @@ function FieldRenderer({ name, property, value, required, onChange }: FieldRende
   }
 
   // 默认字符串类型 - 文本输入
+  const placeholder = name === 'selector'
+    ? '#login-btn 或 .submit-button'
+    : name === 'ai_target'
+      ? '如：登录按钮、搜索框'
+      : `输入${label}`
+
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -163,7 +176,7 @@ function FieldRenderer({ name, property, value, required, onChange }: FieldRende
           onChange={(e) => onChange(e.target.value)}
           rows={4}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-          placeholder={`输入${label}`}
+          placeholder={placeholder}
         />
       ) : (
         <input
@@ -171,8 +184,18 @@ function FieldRenderer({ name, property, value, required, onChange }: FieldRende
           value={(value as string) ?? (defaultValue as string) ?? ''}
           onChange={(e) => onChange(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder={`输入${label}`}
+          placeholder={placeholder}
         />
+      )}
+      {name === 'selector' && (
+        <p className="text-xs text-gray-400 mt-1">
+          浏览器中右键元素 → 检查 → 右键高亮节点 → Copy → Copy selector
+        </p>
+      )}
+      {name === 'ai_target' && (
+        <p className="text-xs text-gray-400 mt-1">
+          用自然语言描述目标元素，无需 CSS 选择器
+        </p>
       )}
     </div>
   )

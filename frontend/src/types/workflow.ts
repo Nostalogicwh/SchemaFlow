@@ -6,7 +6,7 @@
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'failed'
 
 // 节点分类
-export type NodeCategory = 'base' | 'browser' | 'data' | 'control' | 'ai'
+export type NodeCategory = 'base' | 'browser' | 'data' | 'control'
 
 // 节点元数据（从后端 /api/actions 获取）
 export interface ActionMetadata {
@@ -38,6 +38,7 @@ export interface WorkflowNode {
   id: string
   type: string
   config: Record<string, unknown>
+  position?: { x: number; y: number }
   meta?: {
     generated_by?: 'manual' | 'ai' | 'recorded'
     original_prompt?: string
@@ -155,4 +156,34 @@ export interface ExecutionState {
   logs: WSLog[]
   screenshot: string | null
   userInputRequest: WSUserInputRequired | null
+  nodeRecords: NodeExecutionRecord[]
+}
+
+// 节点执行记录
+export interface NodeExecutionRecord {
+  node_id: string
+  node_type: string
+  node_label: string
+  status: string
+  started_at: string | null
+  finished_at: string | null
+  duration_ms: number | null
+  result: Record<string, unknown> | null
+  error: string | null
+  screenshot_base64: string | null
+  logs: { timestamp: string; level: string; message: string }[]
+}
+
+// 执行记录（持久化）
+export interface ExecutionRecord {
+  execution_id: string
+  workflow_id: string
+  status: string
+  started_at: string | null
+  finished_at: string | null
+  duration_ms: number | null
+  total_nodes: number
+  completed_nodes: number
+  failed_nodes: number
+  node_records: NodeExecutionRecord[]
 }
