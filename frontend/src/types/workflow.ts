@@ -6,7 +6,7 @@
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'failed'
 
 // 节点分类
-export type NodeCategory = 'base' | 'browser' | 'data' | 'control' | 'ai'
+export type NodeCategory = 'base' | 'browser' | 'data' | 'control'
 
 // 节点元数据（从后端 /api/actions 获取）
 export interface ActionMetadata {

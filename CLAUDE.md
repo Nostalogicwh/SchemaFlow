@@ -105,7 +105,7 @@ cd backend && python -c "
 import py_compile
 for f in ['engine/context.py','engine/executor.py','api/execution.py',
           'engine/actions/base.py','engine/actions/browser.py',
-          'engine/actions/data.py','engine/actions/control.py','engine/actions/ai.py']:
+          'engine/actions/data.py','engine/actions/control.py']:
     py_compile.compile(f, doraise=True)
     print(f'OK: {f}')
 "
@@ -113,7 +113,7 @@ for f in ['engine/context.py','engine/executor.py','api/execution.py',
 # 2. 后端模块导入测试
 cd backend && python -c "
 import sys; sys.path.insert(0,'.')
-from engine.actions import base, browser, data, control, ai
+from engine.actions import base, browser, data, control
 from engine.executor import WorkflowExecutor
 from api.websocket import manager
 print('所有模块导入成功')
