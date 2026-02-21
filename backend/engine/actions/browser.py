@@ -4,6 +4,37 @@ from typing import Dict, Any
 from ..actions import register_action
 
 
+async def _locate_by_ai_target(page, ai_target: str, context=None):
+    """通过语义描述定位元素，按优先级尝试多种策略。
+
+    Args:
+        page: Playwright 页面实例
+        ai_target: 用户描述的目标元素（如"登录按钮"、"搜索框"）
+        context: 执行上下文（用于日志）
+
+    Returns:
+        定位到的 Locator
+    """
+    strategies = [
+        ("get_by_role('button')", lambda: page.get_by_role("button", name=ai_target)),
+        ("get_by_role('link')", lambda: page.get_by_role("link", name=ai_target)),
+        ("get_by_text", lambda: page.get_by_text(ai_target, exact=False)),
+        ("get_by_placeholder", lambda: page.get_by_placeholder(ai_target)),
+        ("get_by_label", lambda: page.get_by_label(ai_target)),
+        ("aria-label", lambda: page.locator(f"[aria-label*='{ai_target}']")),
+        ("title", lambda: page.locator(f"[title*='{ai_target}']")),
+    ]
+
+    for name, get_locator in strategies:
+        locator = get_locator()
+        count = await locator.count()
+        if count > 0:
+            if context:
+                await context.log("info", f"AI 定位成功 [{name}]: {ai_target} (匹配 {count} 个)")
+            return locator.first
+    raise ValueError(f"AI 定位失败: 未找到匹配「{ai_target}」的元素")
+
+
 @register_action(
     name="open_tab",
     label="打开标签页",
@@ -123,10 +154,8 @@ async def click_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
         await context.page.click(selector, timeout=30000)
     elif ai_target:
         await context.log("info", f"AI 点击: {ai_target}")
-        # 使用 Browser Use 的 AI 定位
-        # 这里简化处理，实际需要集成 Browser Use
-        # result = await context.ai_click(ai_target)
-        raise NotImplementedError("ai_target 需要集成 Browser Use")
+        locator = await _locate_by_ai_target(context.page, ai_target, context)
+        await locator.click(timeout=30000)
     else:
         raise ValueError("click 节点需要 selector 或 ai_target 参数")
 
@@ -144,6 +173,10 @@ async def click_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
             "selector": {
                 "type": "string",
                 "description": "CSS 选择器"
+            },
+            "ai_target": {
+                "type": "string",
+                "description": "AI 定位目标描述（当 selector 不存在时使用）"
             },
             "value": {
                 "type": "string",
@@ -176,18 +209,25 @@ async def input_text_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
         执行结果
     """
     selector = config.get("selector")
+    ai_target = config.get("ai_target")
     value = config.get("value", "")
     clear_before = config.get("clear_before", True)
     press_enter = config.get("press_enter", False)
 
-    if not selector:
-        raise ValueError("input_text 节点需要 selector 参数")
+    if not selector and not ai_target:
+        raise ValueError("input_text 节点需要 selector 或 ai_target 参数")
 
-    await context.log("info", f"输入文本到 {selector}: {value[:50]}...")
-
-    if clear_before:
-        await context.page.fill(selector, "")
-    await context.page.type(selector, value)
+    if selector:
+        await context.log("info", f"输入文本到 {selector}: {value[:50]}...")
+        if clear_before:
+            await context.page.fill(selector, "")
+        await context.page.type(selector, value)
+    else:
+        await context.log("info", f"AI 输入到 {ai_target}: {value[:50]}...")
+        locator = await _locate_by_ai_target(context.page, ai_target, context)
+        if clear_before:
+            await locator.fill("")
+        await locator.type(value)
 
     if press_enter:
         await context.page.keyboard.press("Enter")

@@ -57,7 +57,8 @@ export function Toolbar({ actions, onAIGenerate }: ToolbarProps) {
       setAiPrompt('')
     } catch (error) {
       console.error('AI 编排失败:', error)
-      alert('AI 编排失败，请检查后端配置')
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      alert(detail || 'AI 编排失败，请检查后端配置')
     } finally {
       setAiLoading(false)
     }

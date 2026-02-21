@@ -1,5 +1,6 @@
 """AI 工作流生成 API - 基于自然语言描述生成工作流节点和连线。"""
 import json
+import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -7,6 +8,8 @@ import httpx
 
 from engine.actions import registry
 from config import get_settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -69,14 +72,21 @@ async def generate_workflow(request: GenerateRequest):
 
     # 调用大模型
     try:
+        logger.info("AI 生成工作流 - prompt: %s, model: %s", request.prompt, request.model)
         result = await call_llm(system_prompt, request.prompt, request.model)
+        logger.info("LLM 响应长度: %d", len(result))
     except Exception as e:
+        logger.exception("调用大模型失败")
         raise HTTPException(status_code=500, detail=f"调用大模型失败: {e}")
 
     # 解析响应
     try:
         workflow_data = parse_llm_response(result)
+        logger.info("解析成功 - 节点: %d, 连线: %d",
+                     len(workflow_data.get("nodes", [])),
+                     len(workflow_data.get("edges", [])))
     except Exception as e:
+        logger.error("解析 LLM 响应失败 - 原始内容: %s", result[:500])
         raise HTTPException(status_code=500, detail=f"解析生成结果失败: {e}")
 
     return GenerateResponse(
@@ -100,6 +110,8 @@ async def call_llm(system_prompt: str, user_prompt: str, model: str = None) -> s
     if not api_key:
         raise ValueError("未配置 LLM API Key（设置 LLM_API_KEY 环境变量或 settings.toml）")
 
+    logger.info("调用 LLM - base_url: %s, model: %s", base_url, model)
+
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
             f"{base_url}/chat/completions",
@@ -116,6 +128,7 @@ async def call_llm(system_prompt: str, user_prompt: str, model: str = None) -> s
                 "temperature": temperature,
             },
         )
+        logger.info("LLM HTTP 状态: %d", response.status_code)
         response.raise_for_status()
         data = response.json()
         return data["choices"][0]["message"]["content"]

@@ -56,6 +56,10 @@ function App() {
       setSelectedWorkflowId(workflow.id)
       setCurrentWorkflow(workflow)
       setListVersion(v => v + 1)
+    } catch (error) {
+      console.error('创建工作流失败:', error)
+    }
+  }, [])
 
   // 保存工作流
   const handleSaveWorkflow = useCallback(async (workflow: Workflow) => {
