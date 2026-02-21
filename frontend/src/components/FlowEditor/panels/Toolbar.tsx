@@ -1,9 +1,7 @@
-/**
- * 节点工具栏 - 拖拽添加节点 + AI 编排
- */
 import { useState } from 'react'
 import type { ActionMetadata, NodeCategory } from '@/types/workflow'
 import { aiApi } from '@/api'
+import { toast } from '@/stores/uiStore'
 
 interface ToolbarProps {
   actions: ActionMetadata[]
@@ -58,7 +56,7 @@ export function Toolbar({ actions, onAIGenerate }: ToolbarProps) {
     } catch (error) {
       console.error('AI 编排失败:', error)
       const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      alert(detail || 'AI 编排失败，请检查后端配置')
+      toast.error(detail || 'AI 编排失败，请检查后端配置')
     } finally {
       setAiLoading(false)
     }

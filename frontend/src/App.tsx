@@ -2,8 +2,10 @@ import { useCallback } from 'react'
 import { FlowEditor } from '@/components/FlowEditor'
 import { WorkflowList } from '@/components/WorkflowList'
 import { ExecutionPanel } from '@/components/ExecutionPanel'
+import { Toast, ErrorBoundary, ConfirmDialog } from '@/components/common'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { useExecutionStore } from '@/stores/executionStore'
+import { toast } from '@/stores/uiStore'
 import { useExecution } from '@/hooks/useExecution'
 import { workflowApi } from '@/api'
 
@@ -56,10 +58,10 @@ function App() {
       if (!workflow) return
       try {
         await saveWorkflow(workflow)
-        alert('保存成功')
+        toast.success('保存成功')
       } catch (error) {
         console.error('保存工作流失败:', error)
-        alert('保存失败')
+        toast.error('保存失败')
       }
     },
     [saveWorkflow]
@@ -67,6 +69,8 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-100">
+      <Toast />
+      <ConfirmDialog />
       <header className="h-12 bg-white border-b flex items-center justify-between px-4 shrink-0">
         <h1 className="font-bold text-lg">SchemaFlow</h1>
         <div className="flex items-center gap-4">
@@ -114,11 +118,13 @@ function App() {
 
         <main className="flex-1 overflow-hidden">
           {currentWorkflow ? (
-            <FlowEditor
-              workflow={currentWorkflow}
-              nodeStatuses={executionState.nodeStatuses}
-              onSave={handleSaveWorkflow}
-            />
+            <ErrorBoundary>
+              <FlowEditor
+                workflow={currentWorkflow}
+                nodeStatuses={executionState.nodeStatuses}
+                onSave={handleSaveWorkflow}
+              />
+            </ErrorBoundary>
           ) : (
             <div className="h-full flex items-center justify-center text-gray-500">
               <div className="text-center">

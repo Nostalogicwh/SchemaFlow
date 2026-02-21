@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useWorkflowStore } from '@/stores/workflowStore'
+import { confirm as confirmDialog } from '@/stores/uiStore'
 import type { WorkflowListItem } from '@/types/workflow'
 import { workflowApi } from '@/api'
 
@@ -33,7 +34,8 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!confirm('确定删除此工作流？')) return
+    const confirmed = await confirmDialog('删除确认', '确定删除此工作流？')
+    if (!confirmed) return
 
     try {
       await workflowApi.delete(id)
