@@ -73,10 +73,10 @@
   - `public/test.html`: 独立测试页面
   - `backend/test_backend.py`: 后端测试脚本
 
-## 已知问题
+## 已知问题（已在 v0.1.1 修复）
 
-- WebSocket 实时截图推送未正常工作
-- 工作流执行状态未实时同步到前端节点
+- ~~WebSocket 实时截图推送未正常工作~~
+- ~~工作流执行状态未实时同步到前端节点~~
 - `ai_action` 节点为占位实现，未集成 Browser Use
 
 ## 文件结构

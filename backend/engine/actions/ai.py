@@ -39,7 +39,7 @@ async def ai_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     prompt = config.get("prompt")
     model = config.get("model", "deepseek-chat")
 
-    context.log("info", f"AI 执行: {prompt[:50]}...")
+    await context.log("info", f"AI 执行: {prompt[:50]}...")
 
     # TODO: 集成 Browser Use
     # 这里提供一个简化版本，实际应该使用 browser_use 库
@@ -53,7 +53,7 @@ async def ai_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     # history = await agent.run()
 
     # 暂时返回占位结果
-    context.log("info", "AI 节点需要集成 Browser Use，当前为占位实现")
+    await context.log("info", "AI 节点需要集成 Browser Use，当前为占位实现")
 
     return {
         "prompt": prompt,

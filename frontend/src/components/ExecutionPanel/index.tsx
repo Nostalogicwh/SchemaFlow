@@ -74,7 +74,7 @@ export function ExecutionPanel({
       <div className="flex-1 p-2 overflow-hidden">
         {screenshot ? (
           <img
-            src={`data:image/png;base64,${screenshot}`}
+            src={`data:image/jpeg;base64,${screenshot}`}
             alt="执行截图"
             className="w-full h-full object-contain rounded"
           />

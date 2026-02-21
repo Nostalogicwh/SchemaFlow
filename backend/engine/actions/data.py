@@ -38,7 +38,7 @@ async def extract_text_action(context: Any, config: Dict[str, Any]) -> Dict[str,
     selector = config.get("selector")
     output_var = config.get("output_var")
 
-    context.log("info", f"提取文本: {selector}")
+    await context.log("info", f"提取文本: {selector}")
 
     element = await context.page.query_selector(selector)
     if element:
@@ -50,7 +50,7 @@ async def extract_text_action(context: Any, config: Dict[str, Any]) -> Dict[str,
     context.variables[output_var] = text
     context.clipboard = text
 
-    context.log("info", f"提取到文本: {text[:50]}...")
+    await context.log("info", f"提取到文本: {text[:50]}...")
 
     return {output_var: text}
 
@@ -91,7 +91,7 @@ async def copy_to_clipboard_action(context: Any, config: Dict[str, Any]) -> Dict
         value = str(context.variables.get(var_name, ""))
 
     context.clipboard = value
-    context.log("info", f"复制到剪贴板: {value[:50]}...")
+    await context.log("info", f"复制到剪贴板: {value[:50]}...")
 
     return {"value": value}
 
@@ -127,7 +127,7 @@ async def paste_from_clipboard_action(context: Any, config: Dict[str, Any]) -> D
     selector = config.get("selector")
     text = context.clipboard or ""
 
-    context.log("info", f"粘贴到 {selector}: {text[:50]}...")
+    await context.log("info", f"粘贴到 {selector}: {text[:50]}...")
 
     await context.page.fill(selector, "")
 
@@ -175,6 +175,6 @@ async def set_variable_action(context: Any, config: Dict[str, Any]) -> Dict[str,
     value = config.get("value", "")
 
     context.variables[name] = value
-    context.log("info", f"设置变量 {name} = {value[:50]}...")
+    await context.log("info", f"设置变量 {name} = {value[:50]}...")
 
     return {name: value}

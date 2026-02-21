@@ -180,7 +180,8 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
   // 开始执行
   const startExecution = useCallback((workflowId?: string) => {
-    const wfId = workflowId || workflowIdRef.current
+    // 防止 React 事件对象被当作 workflowId 传入（从 onClick 直接调用时）
+    const wfId = (typeof workflowId === 'string' ? workflowId : null) || workflowIdRef.current
     if (wfId) {
       send({ type: 'start_execution', workflow_id: wfId })
     } else {

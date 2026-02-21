@@ -71,7 +71,8 @@ class WorkflowExecutor:
         self,
         workflow: Dict[str, Any],
         websocket=None,
-        browser=None
+        browser=None,
+        execution_id: str = None
     ) -> ExecutionContext:
         """执行工作流。
 
@@ -79,11 +80,13 @@ class WorkflowExecutor:
             workflow: 工作流配置
             websocket: WebSocket 连接（可选）
             browser: 浏览器实例（可选）
+            execution_id: 执行 ID（可选，不传则自动生成）
 
         Returns:
             执行上下文
         """
-        execution_id = str(uuid.uuid4())
+        if execution_id is None:
+            execution_id = str(uuid.uuid4())
         context = ExecutionContext(
             execution_id=execution_id,
             workflow_id=workflow["id"],
@@ -100,7 +103,7 @@ class WorkflowExecutor:
         except Exception as e:
             context.status = ExecutionStatus.FAILED
             context.error = str(e)
-            context.log("error", f"执行失败: {str(e)}")
+            await context.log("error", f"执行失败: {str(e)}")
 
             # 发送错误消息
             if context.websocket:
@@ -134,6 +137,9 @@ class WorkflowExecutor:
             context.browser = await self.playwright.chromium.launch(
                 headless=False  # 有头模式，用户可见
             )
+            context.page = await context.browser.new_page()
+        elif context.browser is not None and context.page is None:
+            # 外部传入 browser 但没有 page，创建新页面
             context.page = await context.browser.new_page()
 
         # 计算执行顺序
@@ -208,7 +214,7 @@ class WorkflowExecutor:
                         "success": False,
                         "error": str(e)
                     })
-                context.log("error", f"节点 {node_id} 执行失败: {str(e)}")
+                await context.log("error", f"节点 {node_id} 执行失败: {str(e)}")
                 raise
 
         context.status = ExecutionStatus.COMPLETED

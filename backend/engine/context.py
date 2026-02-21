@@ -88,7 +88,7 @@ class ExecutionContext:
                     "timestamp": datetime.now().isoformat()
                 })
             except Exception as e:
-                self.log("error", f"发送截图失败: {e}")
+                await self.log("error", f"发送截图失败: {e}")
 
     async def request_user_input(self, prompt: str, timeout: int = 300):
         """请求用户输入。
@@ -125,8 +125,8 @@ class ExecutionContext:
         self._user_input_event.set()
         self._user_input_event = asyncio.Event()
 
-    def log(self, level: str, message: str):
-        """记录日志。
+    async def log(self, level: str, message: str):
+        """记录日志并通过 WebSocket 推送。
 
         Args:
             level: 日志级别 (info, warning, error)
@@ -139,6 +139,16 @@ class ExecutionContext:
             "node_id": self.current_node_id
         }
         self.logs.append(log_entry)
+
+        # 通过 WebSocket 推送日志
+        if self.websocket:
+            try:
+                await self.websocket.send_json({
+                    "type": "log",
+                    **log_entry
+                })
+            except Exception:
+                pass
 
     def record_action(self, action_type: str, details: Dict[str, Any]):
         """录制动作（用于 AI 节点转为确定性节点）。

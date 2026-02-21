@@ -25,7 +25,7 @@ async def start_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         执行结果
     """
-    context.log("info", "工作流开始执行")
+    await context.log("info", "工作流开始执行")
     return {}
 
 
@@ -51,5 +51,5 @@ async def end_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         执行结果
     """
-    context.log("info", "工作流执行完成")
+    await context.log("info", "工作流执行完成")
     return {}

@@ -1,6 +1,7 @@
 """执行控制 API。"""
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, BackgroundTasks, Depends
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from typing import Dict, Any
+import asyncio
 import uuid
 import sys
 from pathlib import Path
@@ -33,16 +34,12 @@ def get_executor() -> WorkflowExecutor:
 async def execution_websocket(
     execution_id: str,
     websocket: WebSocket,
-    background_tasks: BackgroundTasks,
-    workflow_id: str = None
 ):
     """执行 WebSocket 连接。
 
     Args:
         execution_id: 执行 ID
         websocket: WebSocket 连接
-        background_tasks: 后台任务
-        workflow_id: 工作流 ID（可选，用于首次连接时自动启动）
     """
     await manager.connect(execution_id, websocket)
 
@@ -60,12 +57,14 @@ async def execution_websocket(
                     workflow = await storage.get_workflow(workflow_id)
 
                     if workflow:
-                        # 在后台任务中执行
                         bg_executor = get_executor()
-                        background_tasks.add_task(
-                            bg_executor.execute,
-                            workflow,
-                            websocket
+                        # 使用 asyncio.create_task 替代 BackgroundTasks
+                        asyncio.create_task(
+                            bg_executor.execute(
+                                workflow,
+                                websocket,
+                                execution_id=execution_id
+                            )
                         )
                     else:
                         await websocket.send_json({
@@ -75,15 +74,17 @@ async def execution_websocket(
 
             elif message_type == "user_input_response":
                 # 用户输入响应
-                response = data.get("response")
+                action = data.get("action", "continue")
                 bg_executor = get_executor()
-                await bg_executor.respond_user_input(execution_id, response)
+                if action == "cancel":
+                    await bg_executor.stop(execution_id)
+                else:
+                    await bg_executor.respond_user_input(execution_id, action)
 
             elif message_type == "stop_execution":
                 # 停止执行
                 bg_executor = get_executor()
                 await bg_executor.stop(execution_id)
-                break
 
     except WebSocketDisconnect:
         manager.disconnect(execution_id)
@@ -102,14 +103,12 @@ async def execution_websocket(
 @router.post("/workflows/{workflow_id}/execute")
 async def execute_workflow(
     workflow_id: str,
-    background_tasks: BackgroundTasks,
     executor: WorkflowExecutor = Depends(get_executor)
 ):
     """启动工作流执行（返回 execution_id）。
 
     Args:
         workflow_id: 工作流 ID
-        background_tasks: 后台任务
         executor: 执行器实例
 
     Returns:

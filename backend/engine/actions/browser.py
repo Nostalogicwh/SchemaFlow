@@ -1,4 +1,5 @@
 """浏览器操作节点。"""
+import base64
 from typing import Dict, Any
 from ..actions import register_action
 
@@ -35,7 +36,7 @@ async def open_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
     if not url:
         raise ValueError("open_tab 节点需要 url 参数")
 
-    context.log("info", f"打开标签页: {url}")
+    await context.log("info", f"打开标签页: {url}")
 
     if context.page is None:
         # 如果没有页面，创建新页面
@@ -77,7 +78,7 @@ async def navigate_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
     if not url:
         raise ValueError("navigate 节点需要 url 参数")
 
-    context.log("info", f"跳转到: {url}")
+    await context.log("info", f"跳转到: {url}")
     await context.page.goto(url, wait_until="domcontentloaded")
     return {"url": url}
 
@@ -118,10 +119,10 @@ async def click_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     ai_target = config.get("ai_target")
 
     if selector:
-        context.log("info", f"点击元素: {selector}")
+        await context.log("info", f"点击元素: {selector}")
         await context.page.click(selector, timeout=30000)
     elif ai_target:
-        context.log("info", f"AI 点击: {ai_target}")
+        await context.log("info", f"AI 点击: {ai_target}")
         # 使用 Browser Use 的 AI 定位
         # 这里简化处理，实际需要集成 Browser Use
         # result = await context.ai_click(ai_target)
@@ -182,7 +183,7 @@ async def input_text_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
     if not selector:
         raise ValueError("input_text 节点需要 selector 参数")
 
-    context.log("info", f"输入文本到 {selector}: {value[:50]}...")
+    await context.log("info", f"输入文本到 {selector}: {value[:50]}...")
 
     if clear_before:
         await context.page.fill(selector, "")
@@ -223,10 +224,10 @@ async def screenshot_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
         执行结果，包含 base64 图片数据
     """
     filename = config.get("filename")
-    context.log("info", "执行截图")
+    await context.log("info", "执行截图")
 
     screenshot_bytes = await context.page.screenshot(type="jpeg", quality=60)
-    base64_data = screenshot_bytes.hex()  # 简化存储，实际可以用 base64
+    base64_data = base64.b64encode(screenshot_bytes).decode()
 
     # 如果有 filename，保存到文件
     if filename:
