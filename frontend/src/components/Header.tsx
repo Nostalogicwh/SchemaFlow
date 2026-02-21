@@ -231,6 +231,7 @@ function ExecutionModeToggle({
             onClick={onToggleSidebar}
             className="md:hidden"
             title={sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+            aria-label={sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
           >
             <Menu className="w-5 h-5" />
           </Button>

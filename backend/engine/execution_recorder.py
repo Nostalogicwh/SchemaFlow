@@ -118,7 +118,7 @@ class ExecutionRecorder:
                 "node_records": [r.to_dict() for r in self.node_records.values()],
             }
             await repo.save_execution(execution_log)
-        except Exception as e:
+        except (IOError, OSError) as e:
             await context.log("error", f"保存执行记录失败: {e}")
 
     def sync_to_context(self, context: ExecutionContext) -> None:

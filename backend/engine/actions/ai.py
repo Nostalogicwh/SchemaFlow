@@ -77,6 +77,6 @@ async def ai_action_action(context: Any, config: Dict[str, Any]) -> Dict[str, An
         
     except ImportError:
         raise ValueError("browser-use库未安装，请运行: pip install browser-use")
-    except Exception as e:
+    except (RuntimeError, TimeoutError) as e:
         await context.log("error", f"AI自动化失败: {str(e)}")
         raise ValueError(f"AI自动化执行失败: {str(e)}")

@@ -5,6 +5,9 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 from pathlib import Path
 
+from fastapi import WebSocketDisconnect
+from websockets.exceptions import ConnectionClosed
+
 from .context import ExecutionContext, ExecutionStatus
 from .constants import WSMessageType
 from .actions import registry
@@ -101,8 +104,10 @@ class WorkflowExecutor:
                         "node_id": context.current_node_id,
                         "message": str(e)
                     })
-                except Exception:
-                    pass
+                except ConnectionClosed:
+                    await context.log("debug", "WebSocket连接已关闭，无法发送错误消息")
+                except WebSocketDisconnect:
+                    await context.log("debug", "WebSocket已断开，无法发送错误消息")
         finally:
             await self._cleanup(context)
 
@@ -236,8 +241,10 @@ class WorkflowExecutor:
                             "type": WSMessageType.EXECUTION_CANCELLED.value,
                             "execution_id": execution_id
                         })
-                    except Exception:
-                        pass
+                    except ConnectionClosed:
+                        await context.log("debug", "WebSocket连接已关闭，无法发送取消消息")
+                    except WebSocketDisconnect:
+                        await context.log("debug", "WebSocket已断开，无法发送取消消息")
 
     async def respond_user_input(self, execution_id: str, response: str):
         context = self.active_executions.get(execution_id)

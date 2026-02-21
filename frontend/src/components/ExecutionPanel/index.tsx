@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge, type BadgeStatus } from '@/components/ui/Badge'
 import { NodeRecordList } from './NodeRecordList'
 import { twSemanticColors, twColors, twTransitions } from '@/constants/designTokens'
+import { Image, FileText } from 'lucide-react'
 
 type TabType = 'screenshot' | 'nodes' | 'logs'
 type LogLevelFilter = 'all' | 'info' | 'warning' | 'error'
@@ -153,8 +154,10 @@ function ScreenshotView({ screenshot }: { screenshot: string | null }) {
             variant="ghost"
             size="sm"
             iconOnly
+            aria-label="缩小"
+            title="缩小"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
             </svg>
           </Button>
@@ -167,8 +170,10 @@ function ScreenshotView({ screenshot }: { screenshot: string | null }) {
             variant="ghost"
             size="sm"
             iconOnly
+            aria-label="放大"
+            title="放大"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </Button>
@@ -201,7 +206,7 @@ function ScreenshotView({ screenshot }: { screenshot: string | null }) {
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <EmptyState
-                icon="📸"
+                icon={Image}
                 title="暂无截图"
                 description="执行工作流后显示截图"
               />
@@ -266,12 +271,14 @@ function ScreenshotModal({
           size="sm"
           iconOnly
           className="text-white hover:bg-neutral-700"
+          aria-label="缩小"
+          title="缩小"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
           </svg>
         </Button>
-        <span className="w-16 text-center text-sm font-medium">
+        <span className="w-16 text-center text-sm font-medium" aria-live="polite">
           {Math.round(scale * 100)}%
         </span>
         <Button
@@ -283,8 +290,10 @@ function ScreenshotModal({
           size="sm"
           iconOnly
           className="text-white hover:bg-neutral-700"
+          aria-label="放大"
+          title="放大"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
         </Button>
@@ -447,7 +456,7 @@ function LogViewer({ logs }: { logs: WSLog[] }) {
           logs.length === 0 ? (
             <div className="h-full flex items-center justify-center">
               <EmptyState
-                icon="📝"
+                icon={FileText}
                 title="暂无日志"
                 description="执行过程中将显示日志信息"
               />

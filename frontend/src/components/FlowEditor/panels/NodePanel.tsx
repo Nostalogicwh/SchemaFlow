@@ -7,6 +7,7 @@ import type { Node } from '@xyflow/react'
 import type { ActionMetadata, JsonSchemaProperty } from '@/types/workflow'
 import { EmptyState } from '@/components/common'
 import { Input } from '@/components/ui/Input'
+import { MousePointer2, Settings2 } from 'lucide-react'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
 import { FormField } from '@/components/ui/FormField'
@@ -45,9 +46,10 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode }: NodePa
   if (!selectedNode) {
     return (
       <EmptyState
-        icon="👆"
+        icon={MousePointer2}
         title="未选中节点"
         description="点击画布中的节点查看和编辑属性"
+        compact
       />
     )
   }
@@ -57,9 +59,10 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode }: NodePa
       <div className="p-4">
         <h3 className="font-bold text-lg mb-2">{selectedNode.type}</h3>
         <EmptyState
-          icon="⚙️"
+          icon={Settings2}
           title="无可配置参数"
           description="此节点类型没有可配置的参数"
+          compact
         />
       </div>
     )
@@ -175,11 +178,15 @@ function FieldRenderer({ name, property, value, required, onChange }: FieldRende
 
   // 布尔类型 - 开关
   if (property.type === 'boolean') {
+    const switchId = `switch-${name}`
     return (
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <label htmlFor={switchId} className="text-sm font-medium text-gray-700 cursor-pointer">{label}</label>
         <button
+          id={switchId}
           type="button"
+          role="switch"
+          aria-checked={!!(value ?? defaultValue)}
           onClick={() => onChange(!(value ?? defaultValue))}
           className={cn(
             'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',

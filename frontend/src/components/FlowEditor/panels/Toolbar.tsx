@@ -177,15 +177,17 @@ export function Toolbar({ actions, onAIGenerate }: ToolbarProps) {
                 <button
                   onClick={() => toggleCategory(category)}
                   className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 transition-colors"
+                  aria-expanded={!isCollapsed}
+                  aria-label={`${isCollapsed ? '展开' : '折叠'}${categoryLabels[category]}分类`}
                 >
                   <span className={`flex items-center gap-2 ${categoryHeaderColors[category]}`}>
                     {categoryLabels[category]}
                     <span className="text-xs text-neutral-400 font-normal">({categoryActions.length})</span>
                   </span>
                   {isCollapsed ? (
-                    <ChevronRight className="w-4 h-4 text-neutral-400" />
+                    <ChevronRight className="w-4 h-4 text-neutral-400" aria-hidden="true" />
                   ) : (
-                    <ChevronDown className="w-4 h-4 text-neutral-400" />
+                    <ChevronDown className="w-4 h-4 text-neutral-400" aria-hidden="true" />
                   )}
                 </button>
                 {!isCollapsed && (

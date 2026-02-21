@@ -5,10 +5,10 @@ import type { WorkflowListItem } from '@/types/workflow'
 import { workflowApi } from '@/api'
 import { LoadingSpinner, EmptyState } from '@/components/common'
 import { Modal } from '@/components/ui/Modal'
+import { Search, FileText, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { FormField } from '@/components/ui/FormField'
 import { Button } from '@/components/ui/Button'
-import { Search, Plus, RefreshCw, Trash2 } from 'lucide-react'
 
 interface WorkflowListProps {
   selectedId: string | null
@@ -178,7 +178,6 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
           placeholder="搜索工作流..."
           prefixIcon={Search}
           clearable
-          size="sm"
         />
       </div>
 
@@ -186,10 +185,10 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
         {filteredWorkflows.length === 0 ? (
           <div className="h-full flex items-center justify-center px-4">
             <EmptyState
-              icon={searchQuery ? '🔍' : '📋'}
+              icon={searchQuery ? Search : FileText}
               title={searchQuery ? '未找到匹配的工作流' : '暂无工作流'}
               description={searchQuery ? '尝试其他关键词' : '创建您的第一个工作流开始使用'}
-              action={!searchQuery ? { label: '新建工作流', onClick: handleOpenCreateModal } : undefined}
+              action={!searchQuery ? { label: '新建工作流', onClick: handleOpenCreateModal, variant: 'primary' } : undefined}
             />
           </div>
         ) : (
@@ -238,7 +237,8 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
                     iconOnly
                     onClick={(e) => handleDelete(workflow.id, e as React.MouseEvent)}
                     className="opacity-0 group-hover:opacity-100 transition-opacity -mr-1"
-                    title="删除"
+                    title="删除工作流"
+                    aria-label={`删除工作流: ${workflow.name}`}
                   >
                     <Trash2 className="w-3.5 h-3.5 text-neutral-400 hover:text-red-500" />
                   </Button>

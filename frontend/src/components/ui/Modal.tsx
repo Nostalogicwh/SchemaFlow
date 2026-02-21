@@ -107,27 +107,28 @@ export function Modal({
   const isFullscreen = size === 'fullscreen'
 
   return (
-    <div
-      className={`
-        fixed inset-0 z-50 flex items-center justify-center bg-black/50
-        animate-fade-in
-        ${isFullscreen ? 'p-0' : 'p-4'}
-      `}
-      onClick={handleOverlayClick}
-    >
       <div
-        ref={modalRef}
-        tabIndex={-1}
-        onKeyDown={handleKeyDown}
         className={`
-          bg-white rounded-lg shadow-lg overflow-hidden
-          w-full animate-fade-in
-          ${isFullscreen ? '' : sizeClasses[size]}
+          fixed inset-0 z-50 flex items-center justify-center bg-black/50
+          animate-fade-in
+          ${isFullscreen ? 'p-0' : 'p-4'}
         `}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={title ? 'modal-title' : undefined}
+        onClick={handleOverlayClick}
       >
+        <div
+          ref={modalRef}
+          tabIndex={-1}
+          onKeyDown={handleKeyDown}
+          className={`
+            bg-white rounded-lg shadow-lg overflow-hidden
+            w-full animate-scale-in
+            transition-all duration-200 ease-out
+            ${isFullscreen ? '' : sizeClasses[size]}
+          `}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={title ? 'modal-title' : undefined}
+        >
         {/* Header */}
         {title && (
           <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
@@ -139,7 +140,7 @@ export function Modal({
             </h3>
             <button
               onClick={onClose}
-              className="p-1 rounded-md text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors"
+              className="p-1 rounded-md text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-all duration-150 ease-out focus:outline-none focus:ring-2 focus:ring-blue-400/50"
               aria-label="关闭"
             >
               <svg

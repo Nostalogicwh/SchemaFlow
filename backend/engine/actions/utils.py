@@ -79,7 +79,7 @@ async def locate_element(
             if context:
                 await context.log("error", f"等待元素超时: {used_selector}")
             raise ValueError(f"等待元素超时 ({timeout}ms): {used_selector}")
-        except Exception as e:
+        except (TimeoutError, ValueError) as e:
             if context:
                 await context.log("error", f"元素定位失败: {used_selector}, 错误: {str(e)}")
             raise ValueError(f"元素定位失败: {used_selector}, 错误: {str(e)}")

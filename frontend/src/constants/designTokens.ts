@@ -109,8 +109,8 @@ export const semanticColors = {
   text: {
     primary: '#171717',
     secondary: '#525252',
-    tertiary: '#A3A3A3',
-    disabled: '#D4D4D4',
+    tertiary: '#737373',
+    disabled: '#A3A3A3',
     inverted: '#FFFFFF',
   },
   bg: {
@@ -137,8 +137,8 @@ export const twSemanticColors = {
   text: {
     primary: 'text-neutral-900',
     secondary: 'text-neutral-600',
-    tertiary: 'text-neutral-400',
-    disabled: 'text-neutral-300',
+    tertiary: 'text-neutral-500',
+    disabled: 'text-neutral-400',
     inverted: 'text-white',
   },
   bg: {

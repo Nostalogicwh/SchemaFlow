@@ -17,3 +17,16 @@ export { FormField, type FormFieldProps, type LabelPosition } from './FormField'
 export { Modal, type ModalProps } from './Modal'
 export { Badge, DotBadge, type BadgeProps, type BadgeStatus, type DotBadgeProps } from './Badge'
 export { Tag, CategoryDot, type TagProps, type TagCategory, type CategoryDotProps } from './Tag'
+
+// P7 - Skeleton 骨架屏组件
+export {
+  Skeleton,
+  SkeletonCard,
+  SkeletonListItem,
+  SkeletonTable,
+  type SkeletonProps,
+  type SkeletonVariant,
+  type SkeletonCardProps,
+  type SkeletonListItemProps,
+  type SkeletonTableProps,
+} from './Skeleton'

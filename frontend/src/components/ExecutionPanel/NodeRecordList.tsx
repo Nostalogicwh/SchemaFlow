@@ -3,6 +3,7 @@ import type { NodeExecutionRecord } from '@/types/workflow'
 import { Badge, type BadgeStatus } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/common'
 import { twSemanticColors, twColors, twTransitions } from '@/constants/designTokens'
+import { Play } from 'lucide-react'
 
 interface NodeRecordListProps {
   records: NodeExecutionRecord[]
@@ -15,7 +16,7 @@ export function NodeRecordList({ records }: NodeRecordListProps) {
     return (
       <div className="h-full flex items-center justify-center">
         <EmptyState
-          icon="🔧"
+          icon={Play}
           title="暂无执行记录"
           description="执行工作流后将显示节点执行记录"
         />

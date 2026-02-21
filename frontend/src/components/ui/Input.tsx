@@ -10,7 +10,7 @@
 
 import { forwardRef, useState } from 'react'
 import { cn } from '@/utils'
-import { X, LucideIcon } from 'lucide-react'
+import { X, type LucideIcon } from 'lucide-react'
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> {
   /** 输入框类型 */

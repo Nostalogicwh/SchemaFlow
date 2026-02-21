@@ -2,7 +2,8 @@
 import asyncio
 import json
 from typing import Dict, Any, List, Optional, Tuple
-from playwright.async_api import Page, Locator
+from playwright.async_api import Page, Locator, TimeoutError as PlaywrightTimeoutError
+from openai import APIError, RateLimitError, APITimeoutError
 
 
 async def wait_for_page_stability(page: Page, timeout: int = 5000) -> bool:
@@ -19,7 +20,7 @@ async def wait_for_page_stability(page: Page, timeout: int = 5000) -> bool:
         # 等待网络空闲
         await page.wait_for_load_state("networkidle", timeout=timeout)
         return True
-    except Exception:
+    except TimeoutError:
         # 即使网络未完全空闲，也继续尝试
         return False
 
@@ -204,7 +205,7 @@ async def verify_selector(page: Page, selector: str, timeout: int = 5000) -> Tup
         await locator.wait_for(state="visible", timeout=timeout)
         count = await locator.count()
         return count > 0, locator
-    except Exception:
+    except (TimeoutError, ValueError):
         return False, None
 
 
@@ -282,12 +283,13 @@ async def try_fallback_strategies(page: Page, ai_target: str, context: Any) -> T
                     
                     await context.log("info", f"回退定位成功 [{strategy_name}]: {ai_target} (匹配 {count} 个)")
                     return selector, element
-                except Exception:
+                except (TimeoutError, ValueError, KeyError) as e:
                     # 如果无法获取元素信息，返回原始locator
+                    await context.log("debug", f"无法获取元素信息 [{strategy_name}]: {ai_target} - {e}")
                     await context.log("info", f"回退定位成功 [{strategy_name}]: {ai_target} (匹配 {count} 个)")
                     return f"[{strategy_name}]: {ai_target}", element
-                    
-        except Exception as e:
+
+        except (TimeoutError, ValueError) as e:
             await context.log("debug", f"回退策略 [{strategy_name}] 失败: {str(e)}")
             continue
     
@@ -332,8 +334,8 @@ async def take_debug_screenshot(page: Page, context: Any, filename_prefix: str =
         base64_data = base64.b64encode(screenshot_bytes).decode()
         return f"data:image/jpeg;base64,{base64_data}"
         
-    except Exception as e:
-        await context.log("warn", f"截图失败: {str(e)}")
+    except (IOError, OSError) as e:
+        await context.log("warn", f"截图保存失败: {str(e)}")
         return None
 
 
@@ -376,8 +378,8 @@ async def locate_with_ai(
                 await fallback_locator.wait_for(state="visible", timeout=3000)
                 await context.log("info", f"使用快速定位策略: {fallback_selector}")
                 return fallback_selector
-            except Exception:
-                await context.log("info", "快速定位策略验证失败，继续使用AI定位")
+            except TimeoutError:
+                await context.log("info", "快速定位策略超时，继续使用AI定位")
     
     # 3. 提取页面元素
     elements = await extract_interactive_elements(page)
@@ -408,7 +410,7 @@ async def locate_with_ai(
         response_text = response.choices[0].message.content
         await context.log("debug", f"AI响应: {response_text[:300]}...")
         
-    except Exception as e:
+    except (APIError, RateLimitError, APITimeoutError) as e:
         raise ValueError(f"LLM调用失败: {str(e)}")
     
     parsed = parse_ai_response(response_text)

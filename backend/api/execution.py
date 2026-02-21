@@ -1,6 +1,7 @@
 """执行控制 API。"""
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
-from typing import Dict, Any
+from websockets.exceptions import ConnectionClosed
+
 import asyncio
 import uuid
 import sys
@@ -79,7 +80,9 @@ async def execution_websocket(
                 "type": "error",
                 "message": str(e)
             })
-        except Exception:
+        except ConnectionClosed:
+            pass
+        except WebSocketDisconnect:
             pass
     finally:
         manager.disconnect(execution_id)

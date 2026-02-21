@@ -75,7 +75,7 @@ async def generate_workflow(request: GenerateRequest):
         logger.info("AI 生成工作流 - prompt: %s, model: %s", request.prompt, request.model)
         result = await call_llm(system_prompt, request.prompt, request.model)
         logger.info("LLM 响应长度: %d", len(result))
-    except Exception as e:
+    except (httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException) as e:
         logger.exception("调用大模型失败")
         raise HTTPException(status_code=500, detail=f"调用大模型失败: {e}")
 
@@ -85,7 +85,7 @@ async def generate_workflow(request: GenerateRequest):
         logger.info("解析成功 - 节点: %d, 连线: %d",
                      len(workflow_data.get("nodes", [])),
                      len(workflow_data.get("edges", [])))
-    except Exception as e:
+    except json.JSONDecodeError as e:
         logger.error("解析 LLM 响应失败 - 原始内容: %s", result[:500])
         raise HTTPException(status_code=500, detail=f"解析生成结果失败: {e}")
 
