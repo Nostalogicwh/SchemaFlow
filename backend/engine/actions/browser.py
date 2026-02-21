@@ -79,7 +79,20 @@ async def navigate_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
         raise ValueError("navigate 节点需要 url 参数")
 
     await context.log("info", f"跳转到: {url}")
-    await context.page.goto(url, wait_until="domcontentloaded")
+    
+    # 检查是否是 CDP 模式（有登录态）
+    is_cdp = getattr(context, '_is_cdp', False)
+    
+    if is_cdp:
+        # CDP 模式下，确保在现有上下文中跳转，保持登录态
+        await context.log("debug", "CDP 模式跳转，保持登录态")
+        # 使用相同的 page 进行跳转，不创建新页面
+        await context.page.goto(url, wait_until="networkidle")
+        await context.log("info", f"页面跳转完成，当前 URL: {context.page.url}")
+    else:
+        # 独立浏览器模式
+        await context.page.goto(url, wait_until="domcontentloaded")
+    
     return {"url": url}
 
 

@@ -3,10 +3,12 @@ import type { ActionMetadata, NodeCategory } from '@/types/workflow'
 import { aiApi } from '@/api'
 import { toast } from '@/stores/uiStore'
 import { Button } from '@/components/ui/Button'
-import { ChevronDown, ChevronRight, Sparkles, Wand2 } from 'lucide-react'
+import { Modal } from '@/components/ui/Modal'
+import { ChevronDown, ChevronRight, Sparkles, Wand2, AlertTriangle } from 'lucide-react'
 
 interface ToolbarProps {
   actions: ActionMetadata[]
+  hasNodes?: boolean
   onAIGenerate?: (nodes: { id: string; type: string; label?: string; config: Record<string, unknown> }[], edges: { source: string; target: string }[]) => void
 }
 
@@ -57,9 +59,10 @@ function saveCollapsedState(state: Record<string, boolean>) {
   }
 }
 
-export function Toolbar({ actions, onAIGenerate }: ToolbarProps) {
+export function Toolbar({ actions, hasNodes = false, onAIGenerate }: ToolbarProps) {
   const [aiPrompt, setAiPrompt] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsedState)
   const ghostRef = useRef<HTMLDivElement>(null)
 
@@ -106,13 +109,14 @@ export function Toolbar({ actions, onAIGenerate }: ToolbarProps) {
     }
   }
 
-  const handleAIGenerate = async () => {
+  const executeAIGenerate = async () => {
     if (!aiPrompt.trim() || aiLoading) return
     setAiLoading(true)
     try {
       const { nodes, edges } = await aiApi.generateWorkflow(aiPrompt.trim())
       onAIGenerate?.(nodes, edges)
       setAiPrompt('')
+      toast.success('AI 工作流生成成功')
     } catch (error) {
       console.error('AI 编排失败:', error)
       const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -120,6 +124,24 @@ export function Toolbar({ actions, onAIGenerate }: ToolbarProps) {
     } finally {
       setAiLoading(false)
     }
+  }
+
+  const handleAIGenerate = async () => {
+    if (!aiPrompt.trim() || aiLoading) return
+    
+    // 如果当前有工作流节点，显示确认对话框
+    if (hasNodes) {
+      setShowConfirmModal(true)
+      return
+    }
+    
+    // 没有现有工作流，直接生成
+    await executeAIGenerate()
+  }
+
+  const handleConfirmGenerate = async () => {
+    setShowConfirmModal(false)
+    await executeAIGenerate()
   }
 
   const sortedCategories = categoryOrder.filter((cat) => grouped[cat] && grouped[cat].length > 0)
@@ -137,7 +159,7 @@ export function Toolbar({ actions, onAIGenerate }: ToolbarProps) {
             value={aiPrompt}
             onChange={(e) => setAiPrompt(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault()
                 handleAIGenerate()
               }
@@ -216,6 +238,44 @@ export function Toolbar({ actions, onAIGenerate }: ToolbarProps) {
       </div>
 
       <div ref={ghostRef} style={{ position: 'fixed', top: -1000, left: -1000 }} />
+
+      {/* 确认对话框 */}
+      <Modal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        title="确认生成新工作流"
+        size="sm"
+        footer={
+          <div className="flex gap-2 justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowConfirmModal(false)}
+            >
+              取消
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleConfirmGenerate}
+            >
+              确认生成
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex items-start gap-3 py-2">
+          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm text-neutral-700">
+              当前工作流中有节点，生成新的工作流将<span className="font-semibold text-red-600">替换</span>现有内容。
+            </p>
+            <p className="text-xs text-neutral-500 mt-1">
+              建议先保存当前工作流，以免丢失已有内容。
+            </p>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

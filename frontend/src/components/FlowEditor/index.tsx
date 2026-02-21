@@ -229,8 +229,9 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
         target: e.target,
       }))
 
-      setNodes((nds) => [...nds, ...newNodes])
-      setEdges((eds) => [...eds, ...newEdges])
+      // 清除原工作流，添加新节点
+      setNodes(newNodes)
+      setEdges(newEdges)
     },
     [setNodes, setEdges]
   )
@@ -244,7 +245,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
   return (
     <div className="flex h-full relative">
       <div className="border-r bg-white shrink-0 w-48">
-        <Toolbar actions={actions} onAIGenerate={handleAIGenerate} />
+        <Toolbar actions={actions} hasNodes={nodes.length > 0} onAIGenerate={handleAIGenerate} />
       </div>
 
       <div className="flex-1 h-full min-w-0" style={{ minHeight: '400px' }}>
