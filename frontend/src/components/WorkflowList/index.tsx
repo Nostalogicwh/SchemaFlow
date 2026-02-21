@@ -1,14 +1,17 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useWorkflowStore } from '@/stores/workflowStore'
-import { confirm as confirmDialog } from '@/stores/uiStore'
+import { confirm as confirmDialog, toast } from '@/stores/uiStore'
 import type { WorkflowListItem } from '@/types/workflow'
 import { workflowApi } from '@/api'
 import { LoadingSpinner, EmptyState } from '@/components/common'
+import { Modal } from '@/components/ui/Modal'
+import { Input } from '@/components/ui/Input'
+import { FormField } from '@/components/ui/FormField'
 
 interface WorkflowListProps {
   selectedId: string | null
   onSelect: (id: string) => void
-  onCreate: () => void
+  onCreate?: () => void
   refreshKey?: number
 }
 
@@ -32,7 +35,77 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
   const [workflows, setWorkflows] = useState<WorkflowListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [newWorkflowName, setNewWorkflowName] = useState('')
+  const [newWorkflowDescription, setNewWorkflowDescription] = useState('')
+  const [nameError, setNameError] = useState('')
+  const [isCreating, setIsCreating] = useState(false)
   const refreshList = useWorkflowStore((state) => state.refreshList)
+
+  const handleOpenCreateModal = () => {
+    setNewWorkflowName('')
+    setNewWorkflowDescription('')
+    setNameError('')
+    setIsCreateModalOpen(true)
+    onCreate?.()
+  }
+
+  const handleCloseCreateModal = () => {
+    if (isCreating) return
+    setIsCreateModalOpen(false)
+    setNewWorkflowName('')
+    setNewWorkflowDescription('')
+    setNameError('')
+  }
+
+  const validateForm = (): boolean => {
+    if (!newWorkflowName.trim()) {
+      setNameError('工作流名称不能为空')
+      return false
+    }
+    if (newWorkflowName.trim().length > 50) {
+      setNameError('工作流名称不能超过50个字符')
+      return false
+    }
+    setNameError('')
+    return true
+  }
+
+  const handleCreateWorkflow = async () => {
+    if (!validateForm()) return
+
+    setIsCreating(true)
+    try {
+      const newWorkflow = await workflowApi.create({
+        name: newWorkflowName.trim(),
+        description: newWorkflowDescription.trim() || undefined,
+        nodes: [],
+        edges: [],
+      })
+      
+      setWorkflows((prev) => [newWorkflow, ...prev])
+      refreshList()
+      handleCloseCreateModal()
+      toast.success('工作流创建成功')
+      
+      // 自动选中新创建的工作流
+      onSelect(newWorkflow.id)
+    } catch (error) {
+      console.error('创建工作流失败:', error)
+      toast.error('创建工作流失败，请重试')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewWorkflowName(e.target.value)
+    if (nameError) setNameError('')
+  }
+
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewWorkflowDescription(e.target.value)
+  }
 
   const loadWorkflows = async () => {
     try {
@@ -87,7 +160,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
       <div className="p-3 border-b flex justify-between items-center">
         <h2 className="font-bold text-sm">工作流</h2>
         <button
-          onClick={onCreate}
+          onClick={handleOpenCreateModal}
           className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
         >
           + 新建
@@ -120,7 +193,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
             icon={searchQuery ? '🔍' : '📋'}
             title={searchQuery ? '未找到匹配的工作流' : '暂无工作流'}
             description={searchQuery ? '尝试其他关键词' : '创建您的第一个工作流开始使用'}
-            action={!searchQuery ? { label: '新建工作流', onClick: onCreate } : undefined}
+            action={!searchQuery ? { label: '新建工作流', onClick: handleOpenCreateModal } : undefined}
           />
         ) : (
           <div className="divide-y">
@@ -169,6 +242,84 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
           刷新列表
         </button>
       </div>
+
+      {/* 创建工作流弹窗 */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={handleCloseCreateModal}
+        title="创建工作流"
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={handleCloseCreateModal}
+              disabled={isCreating}
+              className="px-4 py-2 text-sm text-neutral-600 hover:text-neutral-800 hover:bg-neutral-100 rounded-md transition-colors disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleCreateWorkflow}
+              disabled={isCreating}
+              className="px-4 py-2 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isCreating && (
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    fill="none"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+              )}
+              {isCreating ? '创建中...' : '创建'}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <FormField
+            label="工作流名称"
+            required
+            error={nameError}
+            helpText="最多50个字符"
+          >
+            <Input
+              type="text"
+              value={newWorkflowName}
+              onChange={handleNameChange}
+              placeholder="请输入工作流名称"
+              disabled={isCreating}
+              maxLength={50}
+              clearable
+            />
+          </FormField>
+
+          <FormField
+            label="描述"
+            helpText="可选，简要描述工作流用途"
+          >
+            <Input
+              type="text"
+              value={newWorkflowDescription}
+              onChange={handleDescriptionChange}
+              placeholder="请输入描述（可选）"
+              disabled={isCreating}
+              maxLength={200}
+              clearable
+            />
+          </FormField>
+        </div>
+      </Modal>
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { useExecutionStore } from '@/stores/executionStore'
 import { useExecution } from '@/hooks/useExecution'
 import type { NodeExecutionRecord, WSLog, WSUserInputRequired } from '@/types/workflow'
 import { EmptyState } from '@/components/common'
+import { Button } from '@/components/ui/Button'
 
 type TabType = 'screenshot' | 'nodes' | 'logs'
 type LogLevelFilter = 'all' | 'info' | 'warning' | 'error'
@@ -13,6 +14,16 @@ export function ExecutionPanel() {
 
   const { isRunning, screenshot, logs, userInputRequest, nodeRecords } = executionState
   const [activeTab, setActiveTab] = useState<TabType>('screenshot')
+  const [isStopping, setIsStopping] = useState(false)
+
+  const handleStopExecution = async () => {
+    setIsStopping(true)
+    try {
+      await stopExecution()
+    } finally {
+      setIsStopping(false)
+    }
+  }
 
   return (
     <div className="h-full flex flex-col bg-gray-900 text-white">
@@ -28,18 +39,15 @@ export function ExecutionPanel() {
           </span>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={stopExecution}
+          <Button
+            onClick={handleStopExecution}
             disabled={!isRunning}
-            className={`
-              px-3 py-1 text-sm rounded
-              ${!isRunning
-                ? 'bg-gray-600 cursor-not-allowed'
-                : 'bg-red-600 hover:bg-red-700'}
-            `}
+            loading={isStopping}
+            variant="danger"
+            size="sm"
           >
             ■ 停止
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -547,6 +555,27 @@ interface UserInputDialogProps {
 }
 
 function UserInputDialog({ request, onResponse }: UserInputDialogProps) {
+  const [isContinuing, setIsContinuing] = useState(false)
+  const [isCancelling, setIsCancelling] = useState(false)
+
+  const handleContinue = async () => {
+    setIsContinuing(true)
+    try {
+      await onResponse(request.node_id, 'continue')
+    } finally {
+      setIsContinuing(false)
+    }
+  }
+
+  const handleCancel = async () => {
+    setIsCancelling(true)
+    try {
+      await onResponse(request.node_id, 'cancel')
+    } finally {
+      setIsCancelling(false)
+    }
+  }
+
   return (
     <div className="p-4 bg-yellow-900/50 border-b border-yellow-700">
       <div className="flex items-start gap-3">
@@ -555,18 +584,24 @@ function UserInputDialog({ request, onResponse }: UserInputDialogProps) {
           <h4 className="font-medium text-yellow-200">需要用户操作</h4>
           <p className="text-sm text-yellow-100 mt-1">{request.prompt}</p>
           <div className="flex gap-2 mt-3">
-            <button
-              onClick={() => onResponse(request.node_id, 'continue')}
-              className="px-4 py-1 bg-green-600 hover:bg-green-700 rounded text-sm"
+            <Button
+              onClick={handleContinue}
+              loading={isContinuing}
+              variant="primary"
+              size="sm"
+              className="bg-green-600 hover:bg-green-700"
             >
               继续执行
-            </button>
-            <button
-              onClick={() => onResponse(request.node_id, 'cancel')}
-              className="px-4 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm"
+            </Button>
+            <Button
+              onClick={handleCancel}
+              loading={isCancelling}
+              variant="secondary"
+              size="sm"
+              className="bg-gray-600 hover:bg-gray-700 text-white"
             >
               取消
-            </button>
+            </Button>
           </div>
         </div>
       </div>

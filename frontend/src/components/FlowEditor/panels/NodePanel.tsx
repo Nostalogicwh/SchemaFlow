@@ -5,6 +5,8 @@ import { useCallback } from 'react'
 import type { Node } from '@xyflow/react'
 import type { ActionMetadata, JsonSchemaProperty } from '@/types/workflow'
 import { EmptyState } from '@/components/common'
+import { Input } from '@/components/ui/Input'
+import { FormField } from '@/components/ui/FormField'
 
 interface NodePanelProps {
   selectedNode: Node | null
@@ -142,18 +144,21 @@ function FieldRenderer({ name, property, value, required, onChange }: FieldRende
   // 数字类型
   if (property.type === 'number' || property.type === 'integer') {
     return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
-        </label>
-        <input
+      <FormField
+        label={label}
+        required={required}
+      >
+        <Input
           type="number"
           value={(value as number) ?? (defaultValue as number) ?? ''}
           onChange={(e) => onChange(e.target.value ? Number(e.target.value) : undefined)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing && e.key === 'Enter') {
+              e.preventDefault()
+            }
+          }}
         />
-      </div>
+      </FormField>
     )
   }
 
@@ -164,39 +169,47 @@ function FieldRenderer({ name, property, value, required, onChange }: FieldRende
       ? '如：登录按钮、搜索框'
       : `输入${label}`
 
+  // 处理textarea的键盘事件，防止输入法组合期间触发回车
+  const handleTextAreaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing && e.key === 'Enter') {
+      e.preventDefault()
+    }
+  }
+
   return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}
-        {required && <span className="text-red-500 ml-1">*</span>}
-      </label>
+    <FormField
+      label={label}
+      required={required}
+      helpText={
+        name === 'selector'
+          ? '浏览器中右键元素 → 检查 → 右键高亮节点 → Copy → Copy selector'
+          : name === 'ai_target'
+            ? '用自然语言描述目标元素，无需 CSS 选择器'
+            : undefined
+      }
+    >
       {name === 'prompt' || name === 'code' ? (
         <textarea
           value={(value as string) ?? (defaultValue as string) ?? ''}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleTextAreaKeyDown}
           rows={4}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
           placeholder={placeholder}
         />
       ) : (
-        <input
+        <Input
           type="text"
           value={(value as string) ?? (defaultValue as string) ?? ''}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           placeholder={placeholder}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing && e.key === 'Enter') {
+              e.preventDefault()
+            }
+          }}
         />
       )}
-      {name === 'selector' && (
-        <p className="text-xs text-gray-400 mt-1">
-          浏览器中右键元素 → 检查 → 右键高亮节点 → Copy → Copy selector
-        </p>
-      )}
-      {name === 'ai_target' && (
-        <p className="text-xs text-gray-400 mt-1">
-          用自然语言描述目标元素，无需 CSS 选择器
-        </p>
-      )}
-    </div>
+    </FormField>
   )
 }
