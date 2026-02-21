@@ -105,8 +105,8 @@ class ExecutionContext:
         self.recorded_actions: List[Dict[str, Any]] = []
         self.node_records: Dict[str, NodeExecutionRecord] = {}
 
-        # 用户输入控制
-        self._user_input_event = asyncio.Event()
+        # 用户输入控制（延迟创建 Event 以确保在有事件循环的上下文中）
+        self._user_input_event: Optional[asyncio.Event] = None
         self._user_input_response: Optional[str] = None
 
     async def send_screenshot(self):
@@ -143,6 +143,8 @@ class ExecutionContext:
             })
 
             try:
+                if self._user_input_event is None:
+                    self._user_input_event = asyncio.Event()
                 await asyncio.wait_for(self._user_input_event.wait(), timeout=timeout)
                 return self._user_input_response
             except asyncio.TimeoutError:
@@ -156,7 +158,8 @@ class ExecutionContext:
             response: 用户响应内容
         """
         self._user_input_response = response
-        self._user_input_event.set()
+        if self._user_input_event is not None:
+            self._user_input_event.set()
         self._user_input_event = asyncio.Event()
 
     async def log(self, level: str, message: str):
