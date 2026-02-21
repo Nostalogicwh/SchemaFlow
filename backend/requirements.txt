@@ -4,7 +4,7 @@ uvicorn[standard]==0.27.0
 websockets==12.0
 
 # Playwright & Browser Use
-playwright==1.41.0
+playwright==1.58.0
 browser-use==0.1.0
 
 # AI
