@@ -78,7 +78,8 @@ class WorkflowExecutor:
         websocket=None,
         browser=None,
         execution_id: str = None,
-        headless: bool = True
+        headless: bool = True,
+        storage_state: Optional[Dict[str, Any]] = None
     ) -> ExecutionContext:
         if execution_id is None:
             execution_id = str(uuid.uuid4())
@@ -90,6 +91,7 @@ class WorkflowExecutor:
             websocket=websocket,
             data_dir=self.data_dir
         )
+        context._storage_state = storage_state  # 存储前端传入的凭证
 
         async with self._get_lock():
             self.active_executions[execution_id] = context
@@ -129,7 +131,8 @@ class WorkflowExecutor:
 
         browser_mgr = BrowserManager()
         context._browser_mgr = browser_mgr
-        await browser_mgr.connect(context, headless)
+        storage_state = getattr(context, '_storage_state', None)
+        await browser_mgr.connect(context, headless=headless, storage_state=storage_state)
         logger.info(f"[{context.execution_id}] 浏览器连接完成 (CDP模式: {getattr(context, '_is_cdp', False)})")
 
         execution_order = topological_sort(
@@ -235,6 +238,24 @@ class WorkflowExecutor:
             })
 
         recorder.sync_to_context(context)
+        
+        # 提取并下发最新凭证
+        browser_mgr = getattr(context, '_browser_mgr', None)
+        if browser_mgr and hasattr(context, '_context'):
+            try:
+                custom_context = getattr(context, '_context', None)
+                if custom_context:
+                    latest_state = await custom_context.storage_state()
+                    if context.websocket:
+                        await context.websocket.send_json({
+                            "type": "storage_state_update",
+                            "data": latest_state
+                        })
+                        logger.info(f"[{context.execution_id}] 已下发最新凭证")
+            except Exception as e:
+                logger.warning(f"[{context.execution_id}] 提取凭证失败: {e}")
+                # 非关键路径，不阻塞执行
+        
         await recorder.save(context, workflow)
 
     async def _cleanup(self, context: ExecutionContext):
