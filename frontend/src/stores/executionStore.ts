@@ -19,8 +19,6 @@ interface ExecutionStoreState {
   loginReason: string | null
   loginUrl: string | null
   currentWorkflowId: string | null
-  // 新增：视图模式
-  viewMode: 'debug' | 'compact'
 }
 
 interface ExecutionStoreActions {
@@ -39,7 +37,6 @@ interface ExecutionStoreActions {
   // 新增
   setLoginRequired: (required: boolean, reason?: string | null, url?: string | null) => void
   setCurrentWorkflowId: (id: string | null) => void
-  setViewMode: (mode: 'debug' | 'compact') => void
 }
 
 type ExecutionStore = ExecutionStoreState & ExecutionStoreActions
@@ -65,7 +62,7 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   loginReason: null,
   loginUrl: null,
   currentWorkflowId: null,
-  viewMode: 'debug',  // 默认调试模式
+  viewMode: 'compact',  // 默认简洁模式
 
   setConnected: (connected) => set({ isConnected: connected }),
 
@@ -126,8 +123,6 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
 
   setCurrentWorkflowId: (id) =>
     set({ currentWorkflowId: id }),
-
-  setViewMode: (mode) => set({ viewMode: mode }),
 
   reset: () => set({ executionState: initialExecutionState }),
 

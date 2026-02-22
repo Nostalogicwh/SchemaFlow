@@ -80,7 +80,7 @@ async def wait_for_element_action(context: Any, config: Dict[str, Any]) -> Dict[
     """
     selector = config.get("selector")
     ai_target = config.get("ai_target")
-    timeout = config.get("timeout", 30)
+    timeout = config.get("timeout", 10)  # 默认10秒，减少等待时间
 
     if not selector and not ai_target:
         raise ValueError("wait_for_element 节点需要提供 selector 或 ai_target 参数")

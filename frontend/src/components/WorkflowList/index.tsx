@@ -45,7 +45,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
   const [nameError, setNameError] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const refreshList = useWorkflowStore((state) => state.refreshList)
-  const { setViewMode, setShowPanel, setCurrentWorkflowId } = useExecutionStore()
+  const { setShowPanel, setCurrentWorkflowId } = useExecutionStore()
   const { startExecution } = useExecution()
 
   const handleQuickExecute = (workflowId: string) => {
@@ -53,8 +53,6 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
     onSelect(workflowId)
     // 设置当前工作流ID
     setCurrentWorkflowId(workflowId)
-    // 切换到简洁模式
-    setViewMode('compact')
     // 显示执行面板
     setShowPanel(true)
     // 开始执行

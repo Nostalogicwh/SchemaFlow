@@ -130,37 +130,22 @@ def build_ai_prompt(url: str, ai_target: str, elements: List[Dict[str, Any]]) ->
             
         elements_desc.append(" ".join(parts))
     
-    prompt = f"""You are an element locator for web automation.
+    prompt = f"""Given the current page and available elements, identify the element the user wants to interact with.
 
-Current page URL: {url}
+Page URL: {url}
+User query: "{ai_target}"
 
-User wants to interact with: "{ai_target}"
-
-Available interactive elements on the page (tag, attributes, text):
+Available elements:
 {chr(10).join(elements_desc)}
 
-Analyze ALL elements carefully and find the best match for the user's description.
+Return JSON with:
+- best_match_index: index of the matching element (or null if no match)
+- selector: CSS selector to locate this element
+- confidence: 0.0-1.0 score indicating match confidence
+- reasoning: brief explanation of why this element matches or why no match was found
+- alternatives: array of other possible element indexes
 
-Respond in JSON format:
-{{
-    "best_match_index": <index of best matching element>,
-    "selector": "<CSS selector to locate this element>",
-    "confidence": <0.0-1.0 confidence score>,
-    "reasoning": "<brief explanation of why this element matches>",
-    "alternatives": [<list of other possible indexes if confident one is wrong>]
-}}
-
-Rules for matching:
-1. For search boxes: Look for input elements with type="text" or type="search", often with id/name containing "search", "query", or similar
-2. For buttons: Look for button tags or input[type="submit"], match by visible text
-3. For links: Look for <a> tags, match by href or visible text
-4. Prefer elements with unique IDs or names
-5. Consider the page context (URL) to understand what elements should exist
-6. If the user describes a "search input box" on a search page, prioritize input fields over chat textareas
-7. Set confidence based on how well the element matches the description
-8. If no good match exists, set confidence to 0 and explain why
-
-Respond ONLY with valid JSON, no other text."""
+Respond with valid JSON only."""
     
     return prompt
 
@@ -375,8 +360,8 @@ async def locate_with_ai(
     url = page.url
     await context.log("info", f"AI定位开始: {ai_target}")
     
-    # 1. 智能等待页面稳定
-    stability_timeout = min(10000, int(timeout * 0.3))
+    # 1. 智能等待页面稳定（限制为3秒内）
+    stability_timeout = min(3000, int(timeout * 0.1))
     await context.log("info", f"等待页面稳定... (timeout: {stability_timeout}ms)")
     await wait_for_page_stability(page, timeout=stability_timeout)
     
@@ -414,7 +399,8 @@ async def locate_with_ai(
     
     parsed = parse_ai_response(response_text)
     
-    if parsed["confidence"] < 0.3:  # 降低置信度阈值，让回退策略有机会执行
+    # 降低置信度阈值到 0.1，让更多元素通过验证
+    if parsed["confidence"] < 0.1:
         await context.log("warn", f"AI定位置信度过低 ({parsed['confidence']}): {parsed['reasoning']}")
         
         # 尝试回退策略
@@ -434,8 +420,8 @@ async def locate_with_ai(
     selector = parsed["selector"]
     await context.log("info", f"AI建议selector: {selector} (置信度: {parsed['confidence']})")
     
-    # 5. 验证selector是否有效
-    is_valid, locator = await verify_selector(page, selector, timeout=min(10000, timeout // 2))
+    # 5. 验证selector是否有效（减少验证超时）
+    is_valid, locator = await verify_selector(page, selector, timeout=min(3000, timeout // 4))
     
     if not is_valid:
         await context.log("warn", f"AI生成的selector无效: {selector}")
@@ -447,7 +433,7 @@ async def locate_with_ai(
             # 构建基于ID的selector（最稳定）
             if element.get('id'):
                 stable_selector = f"#{element['id']}"
-                is_stable_valid, _ = await verify_selector(page, stable_selector, timeout=5000)
+                is_stable_valid, _ = await verify_selector(page, stable_selector, timeout=2000)
                 if is_stable_valid:
                     await context.log("info", f"使用稳定selector: {stable_selector}")
                     return stable_selector
@@ -459,7 +445,7 @@ async def locate_with_ai(
                 element = elements[alt_index]
                 if element.get('id'):
                     alt_selector = f"#{element['id']}"
-                    is_alt_valid, _ = await verify_selector(page, alt_selector, timeout=3000)
+                    is_alt_valid, _ = await verify_selector(page, alt_selector, timeout=1500)
                     if is_alt_valid:
                         await context.log("info", f"使用备选selector: {alt_selector}")
                         return alt_selector
