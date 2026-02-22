@@ -1,4 +1,5 @@
 """执行上下文 - 管理单个工作流执行周期的状态。"""
+
 import asyncio
 import logging
 from dataclasses import dataclass, field
@@ -49,9 +50,10 @@ def create_llm_client():
 
 class ExecutionStatus(str, Enum):
     """执行状态枚举。"""
+
     PENDING = "pending"
     RUNNING = "running"
-    PAUSED = "paused"       # 等待用户输入
+    PAUSED = "paused"  # 等待用户输入
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -60,6 +62,7 @@ class ExecutionStatus(str, Enum):
 @dataclass
 class NodeExecutionRecord:
     """单个节点的执行记录。"""
+
     node_id: str
     node_type: str
     node_label: str
@@ -107,7 +110,7 @@ class ExecutionContext:
         workflow_id: str,
         browser=None,
         websocket=None,
-        data_dir: Path = None
+        data_dir: Path = None,
     ):
         """初始化执行上下文。
 
@@ -153,10 +156,13 @@ class ExecutionContext:
         llm_cfg = None
         try:
             from config import get_settings
+
             llm_cfg = get_settings().get("llm", {})
         except (ImportError, KeyError):
             pass
-        self.llm_model = llm_cfg.get("model", "deepseek-chat") if llm_cfg else "deepseek-chat"
+        self.llm_model = (
+            llm_cfg.get("model", "deepseek-chat") if llm_cfg else "deepseek-chat"
+        )
 
     async def send_screenshot(self):
         """发送截图到前端。"""
@@ -164,12 +170,14 @@ class ExecutionContext:
             try:
                 screenshot = await self.page.screenshot(type="jpeg", quality=60)
                 base64_data = base64.b64encode(screenshot).decode()
-                await self.websocket.send_json({
-                    "type": WSMessageType.SCREENSHOT.value,
-                    "node_id": self.current_node_id,
-                    "data": base64_data,
-                    "timestamp": datetime.now().isoformat()
-                })
+                await self.websocket.send_json(
+                    {
+                        "type": WSMessageType.SCREENSHOT.value,
+                        "node_id": self.current_node_id,
+                        "data": base64_data,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
             except (ConnectionClosed, WebSocketDisconnect) as e:
                 await self.log("debug", f"WebSocket断开，无法发送截图: {e}")
             except TimeoutError as e:
@@ -178,42 +186,80 @@ class ExecutionContext:
                 await self.log("error", f"发送截图失败: {e}")
 
     async def request_user_input(self, prompt: str, timeout: int = 300):
-        """请求用户输入。
+        """请求用户输入（后台模式专用）。
+
+        在后台模式下，通过WebSocket发送消息请求用户干预，
+        设置等待标志并暂停执行，直到用户响应或超时。
 
         Args:
             prompt: 提示信息
             timeout: 超时时间（秒）
 
         Returns:
-            用户响应
+            用户响应（'continue' 或 'cancel'）
+
+        Raises:
+            TimeoutError: 用户输入超时
+            RuntimeError: 用户取消操作
         """
         if self.websocket:
-            await self.websocket.send_json({
-                "type": WSMessageType.USER_INPUT_REQUIRED.value,
-                "node_id": self.current_node_id,
-                "prompt": prompt,
-                "timeout": timeout
-            })
+            # 保存之前的状态并设置为暂停
+            previous_status = self.status
+            self.status = ExecutionStatus.PAUSED
+
+            # 重置用户输入事件和响应
+            self._user_input_response = None
+            self._user_input_event = asyncio.Event()
+
+            # 发送用户输入请求消息到前端
+            await self.websocket.send_json(
+                {
+                    "type": WSMessageType.USER_INPUT_REQUIRED.value,
+                    "node_id": self.current_node_id,
+                    "prompt": prompt,
+                    "timeout": timeout,
+                }
+            )
+
+            await self.log("info", f"等待用户输入: {prompt}")
 
             try:
-                if self._user_input_event is None:
-                    self._user_input_event = asyncio.Event()
+                # 等待用户响应或超时
                 await asyncio.wait_for(self._user_input_event.wait(), timeout=timeout)
+
+                # 恢复之前的状态
+                self.status = previous_status
+
+                # 处理用户响应
+                if self._user_input_response == "cancel":
+                    await self.log("info", "用户取消了操作")
+                    raise RuntimeError("用户取消了操作")
+
+                await self.log("info", "用户继续执行")
                 return self._user_input_response
+
             except asyncio.TimeoutError:
+                # 超时处理
+                self.status = previous_status
+                await self.log("warning", "用户输入超时")
                 raise TimeoutError("用户输入超时")
+
         return None
 
     def respond_user_input(self, response: str):
         """响应用户输入。
 
+        设置用户响应并触发事件，让等待中的 request_user_input 继续执行。
+
         Args:
-            response: 用户响应内容
+            response: 用户响应内容（'continue' 或 'cancel'）
         """
+        # 保存用户响应
         self._user_input_response = response
+
+        # 触发等待事件
         if self._user_input_event is not None:
             self._user_input_event.set()
-        self._user_input_event = asyncio.Event()
 
     async def log(self, level: str, message: str):
         """记录日志并通过 WebSocket 推送。
@@ -226,7 +272,7 @@ class ExecutionContext:
             "timestamp": datetime.now().isoformat(),
             "level": level,
             "message": message,
-            "node_id": self.current_node_id
+            "node_id": self.current_node_id,
         }
         self.logs.append(log_entry)
 
@@ -241,10 +287,9 @@ class ExecutionContext:
 
         if self.websocket:
             try:
-                await self.websocket.send_json({
-                    "type": WSMessageType.LOG.value,
-                    **log_entry
-                })
+                await self.websocket.send_json(
+                    {"type": WSMessageType.LOG.value, **log_entry}
+                )
             except (ConnectionClosed, WebSocketDisconnect):
                 pass
 
@@ -255,9 +300,29 @@ class ExecutionContext:
             action_type: 动作类型
             details: 动作详情
         """
-        self.recorded_actions.append({
-            "type": action_type,
-            "details": details,
-            "node_id": self.current_node_id,
-            "timestamp": datetime.now().isoformat()
-        })
+        self.recorded_actions.append(
+            {
+                "type": action_type,
+                "details": details,
+                "node_id": self.current_node_id,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+
+    def is_cancelled(self) -> bool:
+        """检查执行是否已被取消。
+
+        Returns:
+            如果执行已被取消返回 True，否则返回 False
+        """
+        return self.status == ExecutionStatus.CANCELLED
+
+    async def check_cancelled(self):
+        """检查是否已取消，如果是则抛出取消异常。
+
+        Raises:
+            asyncio.CancelledError: 当执行被取消时
+        """
+        if self.is_cancelled():
+            await self.log("info", "检测到取消请求，正在终止当前操作")
+            raise asyncio.CancelledError("执行已被用户取消")

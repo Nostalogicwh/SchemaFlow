@@ -1,4 +1,5 @@
 """执行控制 API。"""
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from websockets.exceptions import ConnectionClosed
 
@@ -22,7 +23,7 @@ async def execution_websocket(
     websocket: WebSocket,
     executor: WorkflowExecutor = Depends(get_executor),
     manager: ConnectionManager = Depends(get_ws_manager),
-    storage = Depends(get_storage),
+    storage=Depends(get_storage),
 ):
     """执行 WebSocket 连接。
 
@@ -55,14 +56,13 @@ async def execution_websocket(
                                 websocket,
                                 execution_id=execution_id,
                                 headless=headless,
-                                storage_state=storage_state  # 新增
+                                storage_state=storage_state,  # 新增
                             )
                         )
                     else:
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": f"工作流 {workflow_id} 不存在"
-                        })
+                        await websocket.send_json(
+                            {"type": "error", "message": f"工作流 {workflow_id} 不存在"}
+                        )
 
             elif message_type == "user_input_response":
                 action = data.get("action", "continue")
@@ -81,19 +81,66 @@ async def execution_websocket(
                     exec_context = executor.active_executions[exec_id]
                     # 设置一个标志表示登录已确认
                     exec_context._login_confirmed = True
-                    await websocket.send_json({
-                        "type": "login_confirmation_received",
-                        "execution_id": exec_id
-                    })
+                    await websocket.send_json(
+                        {"type": "login_confirmation_received", "execution_id": exec_id}
+                    )
+
+            elif message_type == "debug_ai_locator":
+                # 调试AI定位器
+                node_id = data.get("node_id")
+                target_description = data.get("target_description")
+                saved_selector = data.get("saved_selector")
+                enable_ai_fallback = data.get("enable_ai_fallback", True)
+
+                # 获取当前执行上下文
+                exec_context = None
+                for ctx in executor.active_executions.values():
+                    if ctx.page:
+                        exec_context = ctx
+                        break
+
+                if exec_context and exec_context.page:
+                    try:
+                        from engine.ai_target_locator import debug_locator
+
+                        result = await debug_locator(
+                            exec_context.page,
+                            exec_context,
+                            target_description,
+                            saved_selector,
+                        )
+
+                        await websocket.send_json(
+                            {
+                                "type": "debug_locator_result",
+                                "node_id": node_id,
+                                **result,
+                            }
+                        )
+                    except Exception as e:
+                        await websocket.send_json(
+                            {
+                                "type": "debug_locator_result",
+                                "node_id": node_id,
+                                "success": False,
+                                "error": str(e),
+                            }
+                        )
+                else:
+                    await websocket.send_json(
+                        {
+                            "type": "debug_locator_result",
+                            "node_id": node_id,
+                            "success": False,
+                            "error": "没有活动的浏览器页面",
+                        }
+                    )
 
     except WebSocketDisconnect:
         manager.disconnect(execution_id)
     except Exception as e:
         try:
-            await websocket.send_json({
-                "type": "error",
-                "message": str(e)
-            })
+            await websocket.send_json({"type": "error", "message": str(e)})
         except ConnectionClosed:
             pass
         except WebSocketDisconnect:
@@ -104,8 +151,7 @@ async def execution_websocket(
 
 @router.post("/workflows/{workflow_id}/execute")
 async def execute_workflow(
-    workflow_id: str,
-    executor: WorkflowExecutor = Depends(get_executor)
+    workflow_id: str, executor: WorkflowExecutor = Depends(get_executor)
 ):
     """启动工作流执行（返回 execution_id）。
 
@@ -122,14 +168,13 @@ async def execute_workflow(
         "execution_id": execution_id,
         "workflow_id": workflow_id,
         "status": "pending",
-        "ws_url": f"ws://localhost:8000/api/ws/execution/{execution_id}"
+        "ws_url": f"ws://localhost:8000/api/ws/execution/{execution_id}",
     }
 
 
 @router.post("/executions/{execution_id}/stop")
 async def stop_execution(
-    execution_id: str,
-    executor: WorkflowExecutor = Depends(get_executor)
+    execution_id: str, executor: WorkflowExecutor = Depends(get_executor)
 ):
     """停止执行。
 
@@ -146,8 +191,7 @@ async def stop_execution(
 
 @router.get("/executions/{execution_id}/status")
 async def get_execution_status(
-    execution_id: str,
-    executor: WorkflowExecutor = Depends(get_executor)
+    execution_id: str, executor: WorkflowExecutor = Depends(get_executor)
 ):
     """获取执行状态。
 
@@ -169,5 +213,5 @@ async def get_execution_status(
         "current_node_id": context.current_node_id,
         "start_time": context.start_time.isoformat() if context.start_time else None,
         "end_time": context.end_time.isoformat() if context.end_time else None,
-        "error": context.error
+        "error": context.error,
     }

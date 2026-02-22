@@ -91,6 +91,7 @@ export type WSMessageType =
   | 'storage_state_update'
   | 'require_manual_login'
   | 'login_confirmation_received'
+  | 'ai_intervention_required'
 
 // WebSocket 消息基础结构
 export interface WSMessage {
@@ -134,6 +135,17 @@ export interface WSUserInputRequired extends WSMessage {
   node_id: string
   prompt: string
   timeout: number
+}
+
+// AI干预请求消息
+export interface WSAIInterventionRequired extends WSMessage {
+  type: 'ai_intervention_required'
+  node_id: string
+  node_type: string
+  intervention_type: string
+  reason: string
+  confidence: number
+  screenshot?: string
 }
 
 // 执行完成消息

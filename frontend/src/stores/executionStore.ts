@@ -217,6 +217,25 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
         // 登录确认已收到，可以隐藏登录面板
         set({ loginRequired: false })
         break
+
+      case 'debug_locator_result':
+        // AI定位器调试结果
+        // 可以通过自定义事件或全局状态传递给DebugLocatorModal组件
+        if (typeof window !== 'undefined') {
+          const event = new CustomEvent('debugLocatorResult', {
+            detail: {
+              nodeId: message.node_id,
+              success: message.success,
+              selector: message.selector,
+              confidence: message.confidence,
+              method: message.method,
+              reasoning: message.reasoning,
+              error: message.error,
+            }
+          })
+          window.dispatchEvent(event)
+        }
+        break
     }
   },
 }))

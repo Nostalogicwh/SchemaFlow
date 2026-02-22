@@ -87,7 +87,7 @@ function App() {
 
       <div className="flex-1 flex overflow-hidden relative">
         <aside
-          className={`bg-white border-r shrink-0 transition-all duration-300 ease-in-out ${
+          className={`bg-white border-r border-gray-200 shrink-0 transition-all duration-300 ease-in-out ${
             sidebarCollapsed ? 'w-14' : 'w-56'
           }`}
         >
@@ -134,7 +134,7 @@ function App() {
         </main>
 
         {showPanel && (
-          <aside className="w-96 border-l shrink-0 bg-white">
+          <aside className="w-96 border-l border-gray-200 shrink-0 bg-white shadow-sm">
             <ExecutionPanel />
           </aside>
         )}

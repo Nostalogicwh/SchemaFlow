@@ -23,7 +23,7 @@ export function CredentialManager({ workflowId, domain = '目标网站' }: Crede
   }
 
   const handleClear = async () => {
-    if (confirm('清除后下次运行将需要重新登录，确认清除吗？')) {
+    if (confirm('清除后下次执行将需要重新登录，确认清除吗？')) {
       await credentialStore.remove(workflowId)
       setHasCredential(false)
     }

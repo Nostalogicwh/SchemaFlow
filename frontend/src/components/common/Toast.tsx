@@ -19,12 +19,13 @@ export function Toast() {
   if (toasts.length === 0) return null
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
+    // 将弹窗位置从右上角改为顶部居中，避免超出右侧显示范围
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 max-w-[90vw]">
       {toasts.map((toast) => (
         <div
           key={toast.id}
           className={`
-            px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 min-w-[200px]
+            px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 min-w-[200px] max-w-md
             animate-slide-in ${typeStyles[toast.type]}
           `}
         >

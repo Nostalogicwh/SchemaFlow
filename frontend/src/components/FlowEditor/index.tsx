@@ -265,7 +265,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
 
   return (
     <div className="flex h-full relative">
-      <div className="border-r bg-white shrink-0 w-48">
+      <div className="border-r border-gray-200 bg-white shrink-0 w-48 shadow-sm">
         <Toolbar actions={actions} hasNodes={nodes.length > 0} onAIGenerate={handleAIGenerate} />
       </div>
 
@@ -290,7 +290,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
       </div>
 
       <div
-        className={`border-l bg-white overflow-y-auto shrink-0 transition-all duration-300 ${
+        className={`border-l border-gray-200 bg-white overflow-y-auto shrink-0 transition-all duration-300 shadow-sm ${
           showPanel ? 'w-80' : 'w-0 overflow-hidden'
         }`}
       >

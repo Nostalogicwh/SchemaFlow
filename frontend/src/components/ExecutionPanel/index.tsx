@@ -5,8 +5,10 @@ import type { WSLog, WSUserInputRequired } from '@/types/workflow'
 import { EmptyState } from '@/components/common'
 import { Button } from '@/components/ui/Button'
 import { NodeRecordList } from './NodeRecordList'
+import { AIInterventionPrompt } from './AIInterventionPrompt'
 import { twSemanticColors, twColors, twTransitions } from '@/constants/designTokens'
 import { FileText } from 'lucide-react'
+import { Resizable } from 're-resizable'
 
 export function ExecutionPanel() {
   const { executionState, isConnected } = useExecutionStore()
@@ -14,6 +16,15 @@ export function ExecutionPanel() {
 
   const { isRunning, userInputRequest } = executionState
   const [isStopping, setIsStopping] = useState(false)
+
+  // 判断是否是AI干预请求（通过检测prompt内容）
+  const isAIIntervention = userInputRequest?.prompt?.includes('需要人工干预') || false
+  const [showAIIntervention, setShowAIIntervention] = useState(false)
+
+  // 当检测到AI干预请求时，显示AI干预弹窗
+  useEffect(() => {
+    setShowAIIntervention(isAIIntervention)
+  }, [isAIIntervention])
 
   const handleStopExecution = async () => {
     setIsStopping(true)
@@ -58,9 +69,89 @@ export function ExecutionPanel() {
         />
       )}
 
+      {/* AI干预提示弹窗 */}
+      <AIInterventionPrompt
+        isOpen={showAIIntervention}
+        onClose={() => setShowAIIntervention(false)}
+        onConfirm={() => {
+          setShowAIIntervention(false)
+          respondUserInput(executionState.executionId!, 'continue')
+        }}
+        onCancel={() => {
+          setShowAIIntervention(false)
+          respondUserInput(executionState.executionId!, 'cancel')
+        }}
+      />
+
       {/* 简洁模式布局 */}
       <CompactModeLayout />
     </div>
+  )
+}
+
+// 可拖拽调整大小的区域组件
+interface ResizableSectionProps {
+  title: string
+  defaultHeight: number
+  minHeight?: number
+  maxHeight?: number
+  children: React.ReactNode
+  className?: string
+}
+
+function ResizableSection({
+  title,
+  defaultHeight,
+  minHeight = 100,
+  maxHeight = 600,
+  children,
+  className = '',
+}: ResizableSectionProps) {
+  const [height, setHeight] = useState(defaultHeight)
+
+  return (
+    <Resizable
+      size={{ width: '100%', height }}
+      minHeight={minHeight}
+      maxHeight={maxHeight}
+      onResizeStop={(_e, _direction, _ref, d) => {
+        setHeight(height + d.height)
+      }}
+      enable={{
+        top: true,
+        right: false,
+        bottom: true,
+        left: false,
+        topRight: false,
+        bottomRight: false,
+        bottomLeft: false,
+        topLeft: false,
+      }}
+      handleStyles={{
+        top: {
+          top: 0,
+          height: '4px',
+          cursor: 'ns-resize',
+          backgroundColor: 'transparent',
+        },
+        bottom: {
+          bottom: 0,
+          height: '4px',
+          cursor: 'ns-resize',
+          backgroundColor: 'transparent',
+        },
+      }}
+      handleClasses={{
+        top: 'hover:bg-blue-400/30 transition-colors',
+        bottom: 'hover:bg-blue-400/30 transition-colors',
+      }}
+      className={`border-t border-gray-200 ${className}`}
+    >
+      <h3 className="text-sm font-medium p-2 select-none">{title}</h3>
+      <div className="overflow-auto" style={{ height: 'calc(100% - 36px)' }}>
+        {children}
+      </div>
+    </Resizable>
   )
 }
 
@@ -70,36 +161,32 @@ function CompactModeLayout() {
   const { screenshot, nodeRecords, logs } = executionState
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* 节点列表 */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 min-h-0">
         <h3 className="text-sm font-medium mb-2">节点列表</h3>
         <NodeRecordList records={nodeRecords} />
       </div>
 
-      {/* 实时截图 */}
-      <div className="h-1/3 border-t border-gray-200">
-        <h3 className="text-sm font-medium p-2">实时截图</h3>
-        <div className="h-full overflow-auto p-2">
-          {screenshot ? (
-            <img
-              src={`data:image/jpeg;base64,${screenshot}`}
-              alt="执行截图"
-              className="max-w-full rounded"
-            />
-          ) : (
-            <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-              等待截图...
-            </div>
-          )}
-        </div>
-      </div>
+      {/* 实时截图 - 可拖拽调整大小 */}
+      <ResizableSection title="实时截图" defaultHeight={200} minHeight={120} maxHeight={500}>
+        {screenshot ? (
+          <img
+            src={`data:image/jpeg;base64,${screenshot}`}
+            alt="执行截图"
+            className="max-w-full rounded p-2"
+          />
+        ) : (
+          <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+            等待截图...
+          </div>
+        )}
+      </ResizableSection>
 
-      {/* 日志 */}
-      <div className="h-1/4 border-t border-gray-200">
-        <h3 className="text-sm font-medium p-2">日志</h3>
+      {/* 日志 - 可拖拽调整大小 */}
+      <ResizableSection title="日志" defaultHeight={150} minHeight={100} maxHeight={400}>
         <LogViewer logs={logs} compact />
-      </div>
+      </ResizableSection>
     </div>
   )
 }
