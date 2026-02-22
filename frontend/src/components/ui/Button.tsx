@@ -13,10 +13,10 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700',
-  secondary: 'bg-neutral-100 text-neutral-900 hover:bg-neutral-200 active:bg-neutral-300 border border-neutral-200',
-  danger: 'bg-red-500 text-white hover:bg-red-600 active:bg-red-700',
-  ghost: 'bg-transparent text-neutral-600 hover:bg-neutral-100 active:bg-neutral-200',
+  primary: 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700 active:scale-[0.98]',
+  secondary: 'bg-neutral-100 text-neutral-900 hover:bg-neutral-200 active:bg-neutral-300 active:scale-[0.98] border border-neutral-200',
+  danger: 'bg-red-500 text-white hover:bg-red-600 active:bg-red-700 active:scale-[0.98]',
+  ghost: 'bg-transparent text-neutral-600 hover:bg-neutral-100 active:bg-neutral-200 active:scale-[0.98]',
 }
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -80,7 +80,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     const isDisabled = disabled || loading
 
     const baseClasses =
-      'inline-flex items-center justify-center font-medium rounded-md transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400'
+      'inline-flex items-center justify-center font-medium rounded-md transition-all duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-400'
 
     const stateClasses = isDisabled
       ? 'opacity-50 cursor-not-allowed'
