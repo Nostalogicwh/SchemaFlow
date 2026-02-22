@@ -40,9 +40,13 @@ async def extract_interactive_elements(page: Page, max_elements: int = 50) -> Li
     elements = await page.evaluate("""
         (maxElements) => {
             const interactiveSelectors = [
+                'input[type="text"]',
+                'input[type="search"]',
+                'input:not([type])',
                 'a[href]',
                 'button',
-                'input',
+                'input[type="submit"]',
+                'input[type="button"]',
                 'select',
                 'textarea',
                 '[role="button"]',
@@ -50,6 +54,7 @@ async def extract_interactive_elements(page: Page, max_elements: int = 50) -> Li
                 '[role="checkbox"]',
                 '[role="radio"]',
                 '[role="textbox"]',
+                '[role="searchbox"]',
                 '[role="combobox"]',
                 '[onclick]',
                 '[tabindex]:not([tabindex="-1"])',
@@ -77,6 +82,7 @@ async def extract_interactive_elements(page: Page, max_elements: int = 50) -> Li
                 href: el.href || null,
                 name: el.name || null,
                 value: el.value || null,
+                role: el.getAttribute('role') || null,
             }));
         }
     """, max_elements)
@@ -130,10 +136,10 @@ Current page URL: {url}
 
 User wants to interact with: "{ai_target}"
 
-Available interactive elements on the page:
+Available interactive elements on the page (tag, attributes, text):
 {chr(10).join(elements_desc)}
 
-Analyze the elements and find the best match for the user's description.
+Analyze ALL elements carefully and find the best match for the user's description.
 
 Respond in JSON format:
 {{
@@ -144,12 +150,15 @@ Respond in JSON format:
     "alternatives": [<list of other possible indexes if confident one is wrong>]
 }}
 
-Rules:
-1. Prefer exact text matches over partial matches
-2. Consider element type (button, link, input) based on user intent
-3. If multiple similar elements exist, prefer the first visible one
-4. Generate a robust CSS selector using id, class, or attributes
-5. If no good match exists, set confidence to 0 and explain why
+Rules for matching:
+1. For search boxes: Look for input elements with type="text" or type="search", often with id/name containing "search", "query", or similar
+2. For buttons: Look for button tags or input[type="submit"], match by visible text
+3. For links: Look for <a> tags, match by href or visible text
+4. Prefer elements with unique IDs or names
+5. Consider the page context (URL) to understand what elements should exist
+6. If the user describes a "search input box" on a search page, prioritize input fields over chat textareas
+7. Set confidence based on how well the element matches the description
+8. If no good match exists, set confidence to 0 and explain why
 
 Respond ONLY with valid JSON, no other text."""
     
@@ -212,9 +221,9 @@ async def verify_selector(page: Page, selector: str, timeout: int = 5000) -> Tup
 
 
 async def try_fallback_strategies(page: Page, ai_target: str, context: Any) -> Tuple[Optional[str], Optional[Locator]]:
-    """尝试多重定位策略回退。
+    """尝试多重定位策略回退（通用版本）。
     
-    回退顺序：ID → CSS选择器 → get_by_role → get_by_text → get_by_placeholder → get_by_label
+    回退顺序：get_by_role → get_by_text → get_by_placeholder → get_by_label → 属性匹配
     
     Args:
         page: Playwright页面对象
@@ -225,23 +234,23 @@ async def try_fallback_strategies(page: Page, ai_target: str, context: Any) -> T
         (selector字符串, Locator对象)
     """
     strategies = [
-        # 1. ID选择器（最稳定）
-        ("id", lambda: page.locator(f"#{ai_target}") if not any(c in ai_target for c in " .[]()") else None),
-        
-        # 2. 精确文本匹配
-        ("get_by_text_exact", lambda: page.get_by_text(ai_target, exact=True)),
-        
-        # 3. 模糊文本匹配
-        ("get_by_text_fuzzy", lambda: page.get_by_text(ai_target, exact=False)),
-        
-        # 4. 按钮角色
+        # 1. 按钮角色
         ("get_by_role_button", lambda: page.get_by_role("button", name=ai_target)),
         
-        # 5. 链接角色
+        # 2. 链接角色
         ("get_by_role_link", lambda: page.get_by_role("link", name=ai_target)),
         
-        # 6. 文本框角色
+        # 3. 文本框角色
         ("get_by_role_textbox", lambda: page.get_by_role("textbox", name=ai_target)),
+        
+        # 4. 搜索框角色
+        ("get_by_role_searchbox", lambda: page.get_by_role("searchbox")),
+        
+        # 5. 精确文本匹配
+        ("get_by_text_exact", lambda: page.get_by_text(ai_target, exact=True)),
+        
+        # 6. 模糊文本匹配
+        ("get_by_text_fuzzy", lambda: page.get_by_text(ai_target, exact=False)),
         
         # 7. placeholder
         ("get_by_placeholder", lambda: page.get_by_placeholder(ai_target)),
@@ -367,25 +376,11 @@ async def locate_with_ai(
     await context.log("info", f"AI定位开始: {ai_target}")
     
     # 1. 智能等待页面稳定
-    # 给页面稳定更多时间，但不超过总超时的40%
-    stability_timeout = min(15000, int(timeout * 0.4))
+    stability_timeout = min(10000, int(timeout * 0.3))
     await context.log("info", f"等待页面稳定... (timeout: {stability_timeout}ms)")
     await wait_for_page_stability(page, timeout=stability_timeout)
     
-    # 2. 首先尝试回退策略（快速路径）
-    if enable_fallback:
-        await context.log("info", "尝试快速定位策略...")
-        fallback_selector, fallback_locator = await try_fallback_strategies(page, ai_target, context)
-        if fallback_selector and fallback_locator:
-            # 验证回退策略找到的locator
-            try:
-                await fallback_locator.wait_for(state="visible", timeout=3000)
-                await context.log("info", f"使用快速定位策略: {fallback_selector}")
-                return fallback_selector
-            except TimeoutError:
-                await context.log("info", "快速定位策略超时，继续使用AI定位")
-    
-    # 3. 提取页面元素
+    # 2. 提取页面元素
     elements = await extract_interactive_elements(page)
     await context.log("info", f"提取到 {len(elements)} 个可交互元素")
     

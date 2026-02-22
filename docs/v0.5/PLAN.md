@@ -55,163 +55,134 @@ Web自动化工作流打开新页面时，无法继承用户本地Chrome浏览�
    - 用户明确拒绝服务端存储 cookies/localStorage
    - 需要纯客户端方案
 
-**推荐的解决方案（按优先级排序）：**
+**推荐的解决方案：**
 
-#### 方案A：检测并提示用户（短期方案）⭐ 推荐
+#### 📄 技术架构方案：基于客户端受托的 Web 自动化凭证管理 (Client-Side Vault)
 
-**实现步骤：**
-1. 检测系统中是否有开启调试端口的 Chrome
-   - 扫描常见端口：9222, 9223, 9224, 9225, 9333
-   - 检测 Chrome 进程是否有远程调试参数
-2. 如果没有，给出清晰的启动指南
-   - 区分 macOS/Windows/Linux
-   - 提供一键启动脚本（如果技术上可行）
-3. 在前端添加"浏览器配置"面板
-   - 显示当前连接状态
-   - 提供"检测 Chrome"按钮
-   - 显示操作指南
-
-**优点：**
-- 实现简单，风险低
-- 符合用户隐私要求（纯客户端）
-- 用户可控
-
-**缺点：**
-- 需要用户手动操作
-- 用户体验不够流畅
-
-**工作量评估：** 2-3 天
-
-#### 方案B：使用 Playwright 的 `browser_instance_path`（推荐尝试）
-
-**技术原理：**
-- Playwright 支持直接连接系统 Chrome 的可执行文件
-- 配置示例：
-  ```python
-  config = BrowserConfig(
-      browser_instance_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-  )
-  ```
-
-**实现步骤：**
-1. 检测系统 Chrome 路径
-   - macOS: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
-   - Windows: `C:\Program Files\Google\Chrome\Application\chrome.exe`
-   - Linux: `/usr/bin/google-chrome` 或 `/usr/bin/chromium-browser`
-2. 修改 `browser_manager.py`，使用 `browser_instance_path` 参数
-3. 测试是否能正确访问用户数据
-
-**优点：**
-- 比方案A更自动化
-- 可能直接解决问题
-
-**缺点：**
-- 技术风险高，不确定是否能访问用户数据
-- 需要大量测试
-
-**工作量评估：** 3-5 天
-
-#### 方案C：Cookie 导入导出（如果用户接受）⚠️ 备选
-
-**技术原理：**
-- 提供前端界面让用户手动导出 Chrome cookies（通过浏览器扩展或开发者工具）
-- 工作流执行前导入这些 cookies
-- 完全在客户端处理，服务端不存储
-
-**实现步骤：**
-1. 创建浏览器扩展，用于导出 cookies
-2. 前端提供"导入 cookies"界面
-3. 修改 `browser_manager.py`，在创建 context 时注入 cookies
-4. 提供浏览器内插件或脚本，方便用户导出 cookies
-
-**优点：**
-- 纯客户端，符合隐私要求
-- 技术可行性高
-
-**缺点：**
-- 用户操作复杂
-- 需要用户配合安装插件
-- cookies 有时效性
-
-**工作量评估：** 5-7 天
-
-#### 方案D：复用已打开的标签页（如果可能）🔬 探索性
-
-**技术原理：**
-- 检测用户是否已经在浏览器中打开了目标页面
-- 直接复用该页面，而非创建新页面
-- 这样自然继承登录态
-
-**实现步骤：**
-1. 使用 CDP API 获取当前打开的标签页列表
-2. 检查是否有匹配的 URL
-3. 如果有，切换到该标签页
-4. 如果没有，创建新标签页
-
-**优点：**
-- 用户体验最佳
-- 完全继承登录态
-
-**缺点：**
-- 技术复杂度极高
-- Playwright 限制多
-- 需要用户主动配合（保持浏览器打开）
-
-**工作量评估：** 7-10 天（如果可行）
-
-**相关代码位置：**
-- `backend/engine/browser_manager.py` - 浏览器连接管理
-- `backend/engine/actions/browser.py` - 浏览器操作节点
-
-**参考资源：**
-- [Playwright 连接本地 Chrome](https://m.blog.csdn.net/u014177256/article/details/156098554)
-- [Playwright-MCP 浏览器会话复用](https://blog.51cto.com/u_15591470/14079324)
-- [Playwright BrowserType.launchPersistentContext](https://playwright.dev/python/docs/api/class-browsertype#browser-type-launch-persistent-context)
-
-**需要进一步验证的问题：**
-1. Chrome for Testing 和系统 Chrome 是否同时存在？
-2. Playwright 的 `browser_instance_path` 参数是否能真正访问用户的 Chrome 数据？
-3. 用户是否愿意接受需要手动启动 Chrome 的方案？
-4. 如果需要用户配合，什么样的操作流程最友好？
-
-**建议的实现路径：**
-1. **第一阶段（P0）**：实现方案A（检测并提示用户）
-   - 快速上线，解决阻塞问题
-   - 收集用户反馈
-
-2. **第二阶段（P1）**：尝试方案B（browser_instance_path）
-   - 如果可行，替代方案A
-   - 提升用户体验
-
-3. **第三阶段（P2）**：探索方案C/D
-   - 根据用户反馈决定是否投入
-   - 作为长期优化方向
+##### 1. 架构目标与核心原则
+*   **隐私绝对合规**：服务端（后端引擎）绝对不将用户的 Cookies、LocalStorage 写入数据库或服务器硬盘，做到“用完即毁，片叶不沾身”。
+*   **体验无缝顺滑**：用户只需在首次遇到登录墙时协助扫码/登录一次，后续运行自动注水复用，直到凭证自然失效。
+*   **用户拥有控制权**：用户明确知晓凭证存放在自己电脑的浏览器中，并提供一键清理失效凭证的能力。
 
 ---
 
-### 🔴 CRITICAL-2: AI定位目标执行失败
+##### 2. 核心数据流转设计 (Sequence Flow)
 
-**优先级：** P1（高优先级）
-**影响范围：** AI 编排功能部分不可用
-**来源：** docs/v0.4/存在问题.md:5
+###### 场景一：首次运行（拦截登录 -> 提取凭证 -> 下发前端）
+1. **[前端]** 发起工作流执行请求。
+2. **[后端]** Playwright 在纯内存（无痕模式）中启动，访问目标网站（如 DeepSeek）。
+3. **[后端]** 引擎检测到页面存在登录框，暂停执行，将当前页面截图/流媒体推流给前端。
+4. **[前端]** 弹出“人机协同”控制台，用户在网页上完成扫码或密码登录。
+5. **[后端]** 监测到页面跳转且登录成功，立刻执行 `await context.storage_state()`，将凭证提取为 JSON 对象。
+6. **[后端]** 将此 JSON 附加在执行结果中一并返回，**服务器内存随之销毁，不留任何存档**。
+7. **[前端]** 接收到 JSON，将其静默保存在用户本地的 `IndexedDB` 中（按网站域名或工作流 ID 隔离）。
 
-**问题描述：**
-AI 编排生成的节点中，AI定位目标节点执行失败，导致工作流无法正常完成。
+###### 场景二：后续运行（凭证注水 -> 免密执行）
+1. **[前端]** 用户再次点击“运行工作流”。
+2. **[前端]** 拦截请求，去 `IndexedDB` 检查是否存有该工作流的凭证 JSON。
+3. **[前端]** 若有，将其作为 Request Body 的一部分（`auth_payload`）发送给后端。
+4. **[后端]** 接收到请求，启动 Playwright，直接将收到的 JSON 注入：`context = await browser.new_context(storage_state=auth_payload)`。
+5. **[后端]** Playwright 瞬间获得登录态，绕过登录流程，直接执行后续自动化操作。
+6. **[后端]** 执行完毕，内存销毁。
 
-**可能的原因：**
-1. AI 生成的定位策略不准确
-2. AI Locator 配置错误
-3. 页面加载超时
-4. 选择器动态变化
 
-**需要进一步调研：**
-- 查看具体的错误日志
-- 分析 AI 生成的定位策略
-- 测试不同页面的定位成功率
+##### 3. 前端设计规范 (Web UI & Storage)
 
-**相关代码位置：**
-- `backend/engine/ai_locator.py` - AI 定位器
-- `backend/engine/actions/browser.py` - 浏览器操作节点
+###### 3.1 存储选型：必须使用 IndexedDB
+*   **切忌使用 LocalStorage**：Playwright 导出的 `storage_state` 包含全量 Cookies 和大量站点的 LocalStorage 数据，极易超过浏览器 `LocalStorage` 的 5MB 限制导致报错。
+*   **推荐方案**：使用 `localforage` 库，它提供类似 LocalStorage 的简单 API，但底层自动使用无限容量的 `IndexedDB`。
+
+###### 3.2 交互界面设计 (UI)
+在工作流配置面板的侧边栏，增加一个 **「授权与凭证管理」**模块：
+
+*   **授权开关**：
+    `[ √ ] 记住登录状态（凭证仅保存在您当前浏览器的本地缓存中，服务端不予留存）`
+*   **状态指示器**：
+    *   未授权时显示：`⚪ DeepSeek (未获取凭证)`
+    *   已授权时显示：`🟢 DeepSeek (本地已保存登录凭证)`
+*   **手动清理按钮 (满足你的新增需求)**：
+    当状态为🟢时，右侧显示一个垃圾桶图标或按钮：`[ 🧹 清除失效凭证 ]`
+    *点击动作*：弹窗二次确认“清除后下次运行将需要重新扫码登录，确认清除吗？”，点击确认后，前端立刻删除 `IndexedDB` 中的对应记录，状态变回⚪。
+
+
+##### 4. 后端核心代码实现 (Python FastAPI + Playwright)
+
+后端只需做轻微的改造，支持“接收注入”和“导出下发”。
+
+###### 4.1 接口契约定义 (API Schema)
+```python
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
+
+class WorkflowRunRequest(BaseModel):
+    workflow_id: str
+    # 核心新增：前端传来的凭证 JSON
+    injected_storage_state: Optional[Dict[str, Any]] = None 
+
+class WorkflowRunResponse(BaseModel):
+    status: str
+    result_data: Any
+    # 核心新增：后端下发给前端保存的凭证 JSON
+    new_storage_state: Optional[Dict[str, Any]] = None
+```
+
+###### 4.2 Playwright 引擎改造片段
+```python
+from playwright.async_api import async_playwright
+
+async def execute_workflow(request: WorkflowRunRequest):
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        
+        # 1. [凭证注水] 如果前端传了凭证，直接在初始化时注入
+        if request.injected_storage_state:
+            context = await browser.new_context(
+                storage_state=request.injected_storage_state
+            )
+        else:
+            context = await browser.new_context()
+
+        page = await context.new_page()
+        
+        # 2. 执行自动化逻辑...
+        await page.goto("https://chat.deepseek.com/")
+        
+        # 判断是否需要人为介入登录 (伪代码)
+        is_logged_in = await check_if_logged_in(page)
+        
+        if not is_logged_in:
+            # 触发人机协同流，等待用户扫码...
+            await wait_for_user_manual_login(page)
+            
+        # 3. [凭证提取] 执行完毕后，无论是一直保持登录的，还是刚刚扫码的，都提取最新凭证
+        # 注意：这里返回的是 dict 字典，全程不碰硬盘 I/O！
+        latest_state = await context.storage_state()
+        
+        await browser.close()
+        
+        # 4. [下发前端] 将最新凭证返回，交给前端保存
+        return WorkflowRunResponse(
+            status="success",
+            result_data={"msg": "执行成功"},
+            new_storage_state=latest_state
+        )
+```
+
+---
+
+##### 5. 异常处理：Token 自然过期怎么办？
+
+哪怕有了本地保存，目标网站（如 DeepSeek）的 Cookie 也有自然过期的一天。系统需要具备 **“自动感知失效并要求重登”**的自愈能力。
+
+**处理逻辑：**
+1. 前端依然把 `IndexedDB` 里的（已过期的）凭证发给后端。
+2. 后端 Playwright 注入凭证并打开网页。
+3. 引擎通过逻辑判断（例如：找寻页面上的“登录”按钮，或者判断当前的 URL 是不是跳回了 login 页面），发现**“注入了凭证但依然处于未登录状态”**。
+4. 引擎判断：**凭证已失效**。
+5. 引擎立刻触发**“场景一”**（拦截登录），向前端发送一个特殊指令 `{"action": "REQUIRE_MANUAL_LOGIN", "reason": "TOKEN_EXPIRED"}`。
+6. 前端收到后，唤起扫码推流弹窗，提示用户：`“由于长时间未运行或服务端安全策略，您的登录已失效，请重新扫码激活”`。
+7. 用户扫码完成，后端重新提取新的 `storage_state` 下发，前端**覆写** `IndexedDB` 中的旧凭证。
+8. 整个流程完美自洽，没有死角。
 
 ---
 
@@ -237,28 +208,6 @@ AI 编排生成的节点中，AI定位目标节点执行失败，导致工作流
 3. 使用阴影代替边框：使用 `shadow-sm` 或 `shadow-md`
 
 **工作量评估：** 0.5 天
-
----
-
-### 🔵 STYLE-2: 输入法与回车键重叠
-
-**优先级：** P2（中优先级）
-**影响范围：** 移动端用户体验
-**来源：** docs/v0.4/存在问题.md:1
-
-**问题描述：**
-输入法与回车键重叠，影响输入体验。
-
-**相关组件：**
-- `frontend/src/components/ui/Input.tsx`
-- `frontend/src/components/ui/Textarea.tsx`
-
-**可能的解决方案：**
-1. 添加足够的底部 padding，避免被输入法遮挡
-2. 使用固定定位的输入框
-3. 监听输入法状态，动态调整布局
-
-**工作量评估：** 0.5-1 天
 
 ---
 
