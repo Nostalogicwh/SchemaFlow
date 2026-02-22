@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useExecutionStore } from '@/stores/executionStore'
+import { credentialStore } from '@/services/credentialStore'
 import type { WSMessage } from '@/types/workflow'
 
 interface UseExecutionOptions {
@@ -90,10 +91,17 @@ export function useExecution(options: UseExecutionOptions = {}) {
   }, [])
 
   const startExecution = useCallback(
-    (workflowId?: string, mode: 'headless' | 'headed' = 'headless') => {
+    async (workflowId?: string, mode: 'headless' | 'headed' = 'headless') => {
       const wfId = (typeof workflowId === 'string' ? workflowId : null) || workflowIdRef.current
       if (wfId) {
-        send({ type: 'start_execution', workflow_id: wfId, mode })
+        // 从 IndexedDB 获取凭证
+        const credentials = await credentialStore.get(wfId)
+        send({ 
+          type: 'start_execution', 
+          workflow_id: wfId, 
+          mode,
+          injected_storage_state: credentials  // 可能为 null
+        })
       } else {
         console.error('startExecution: 缺少 workflow_id')
       }
@@ -117,6 +125,16 @@ export function useExecution(options: UseExecutionOptions = {}) {
     [send]
   )
 
+  const confirmLogin = useCallback(
+    (executionId: string) => {
+      send({
+        type: 'login_confirmed',
+        execution_id: executionId
+      })
+    },
+    [send]
+  )
+
   useEffect(() => {
     return () => {
       disconnect()
@@ -129,6 +147,7 @@ export function useExecution(options: UseExecutionOptions = {}) {
     startExecution,
     stopExecution,
     respondUserInput,
+    confirmLogin,  // 新增
     reset,
     showPanel,
     setShowPanel,

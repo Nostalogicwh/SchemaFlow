@@ -79,6 +79,7 @@ export type WSMessageType =
   | 'start_execution'
   | 'stop_execution'
   | 'user_input_response'
+  | 'login_confirmed'
   | 'execution_started'
   | 'node_start'
   | 'node_complete'
@@ -87,6 +88,9 @@ export type WSMessageType =
   | 'execution_complete'
   | 'error'
   | 'log'
+  | 'storage_state_update'
+  | 'require_manual_login'
+  | 'login_confirmation_received'
 
 // WebSocket 消息基础结构
 export interface WSMessage {

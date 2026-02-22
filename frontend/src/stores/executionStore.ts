@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { credentialStore, type StorageState } from '@/services/credentialStore'
 import type {
   ExecutionState,
   NodeStatus,
@@ -13,6 +14,13 @@ interface ExecutionStoreState {
   executionState: ExecutionState
   showPanel: boolean
   executionMode: 'headless' | 'headed'
+  // 新增：登录态相关状态
+  loginRequired: boolean
+  loginReason: string | null
+  loginUrl: string | null
+  currentWorkflowId: string | null
+  // 新增：视图模式
+  viewMode: 'debug' | 'compact'
 }
 
 interface ExecutionStoreActions {
@@ -28,6 +36,10 @@ interface ExecutionStoreActions {
   setExecutionMode: (mode: 'headless' | 'headed') => void
   reset: () => void
   handleMessage: (message: WSMessage) => void
+  // 新增
+  setLoginRequired: (required: boolean, reason?: string | null, url?: string | null) => void
+  setCurrentWorkflowId: (id: string | null) => void
+  setViewMode: (mode: 'debug' | 'compact') => void
 }
 
 type ExecutionStore = ExecutionStoreState & ExecutionStoreActions
@@ -48,6 +60,12 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   executionState: initialExecutionState,
   showPanel: false,
   executionMode: 'headless',
+  // 新增
+  loginRequired: false,
+  loginReason: null,
+  loginUrl: null,
+  currentWorkflowId: null,
+  viewMode: 'debug',  // 默认调试模式
 
   setConnected: (connected) => set({ isConnected: connected }),
 
@@ -98,6 +116,18 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   setShowPanel: (show) => set({ showPanel: show }),
 
   setExecutionMode: (mode) => set({ executionMode: mode }),
+
+  setLoginRequired: (required, reason = null, url = null) =>
+    set({
+      loginRequired: required,
+      loginReason: reason,
+      loginUrl: url,
+    }),
+
+  setCurrentWorkflowId: (id) =>
+    set({ currentWorkflowId: id }),
+
+  setViewMode: (mode) => set({ viewMode: mode }),
 
   reset: () => set({ executionState: initialExecutionState }),
 
@@ -170,6 +200,27 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
         set((state) => ({
           executionState: { ...state.executionState, isRunning: false },
         }))
+        break
+
+      case 'storage_state_update':
+        // 保存后端下发的最新凭证
+        if (message.data && get().currentWorkflowId) {
+          credentialStore.save(get().currentWorkflowId!, message.data as StorageState)
+        }
+        break
+
+      case 'require_manual_login':
+        // 设置状态，触发 UI 显示人机协同面板
+        set({
+          loginRequired: true,
+          loginReason: message.reason as string | null,
+          loginUrl: message.url as string | null
+        })
+        break
+
+      case 'login_confirmation_received':
+        // 登录确认已收到，可以隐藏登录面板
+        set({ loginRequired: false })
         break
     }
   },

@@ -43,6 +43,7 @@ async def execution_websocket(
             if message_type == "start_execution":
                 workflow_id = data.get("workflow_id")
                 mode = data.get("mode", "headless")
+                storage_state = data.get("injected_storage_state")  # 新增：接收前端凭证
                 headless = mode != "headed"
                 if workflow_id:
                     workflow = await storage.get_workflow(workflow_id)
@@ -53,7 +54,8 @@ async def execution_websocket(
                                 workflow,
                                 websocket,
                                 execution_id=execution_id,
-                                headless=headless
+                                headless=headless,
+                                storage_state=storage_state  # 新增
                             )
                         )
                     else:
@@ -71,6 +73,18 @@ async def execution_websocket(
 
             elif message_type == "stop_execution":
                 await executor.stop(execution_id)
+
+            elif message_type == "login_confirmed":
+                # 用户确认已完成登录，通知执行器继续
+                exec_id = data.get("execution_id")
+                if exec_id and exec_id in executor.active_executions:
+                    exec_context = executor.active_executions[exec_id]
+                    # 设置一个标志表示登录已确认
+                    exec_context._login_confirmed = True
+                    await websocket.send_json({
+                        "type": "login_confirmation_received",
+                        "execution_id": exec_id
+                    })
 
     except WebSocketDisconnect:
         manager.disconnect(execution_id)
