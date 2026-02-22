@@ -133,7 +133,7 @@ function ExecuteButton({
           size="sm"
           icon={<Play className="w-4 h-4" />}
         >
-          再次运行
+          重新执行
         </Button>
       )
     case 'error':
@@ -155,7 +155,7 @@ function ExecuteButton({
           size="sm"
           icon={<Play className="w-4 h-4" />}
         >
-          运行
+          执行
         </Button>
       )
   }
@@ -170,7 +170,7 @@ export function Header({
   sidebarCollapsed = true,
 }: HeaderProps) {
   const { currentWorkflow } = useWorkflowStore()
-  const { executionState, executionMode, setExecutionMode } = useExecutionStore()
+  const { executionState, executionMode, setExecutionMode, viewMode, setViewMode } = useExecutionStore()
   const lastExecutionIdRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -227,8 +227,52 @@ function ExecutionModeToggle({
       <div className="relative group">
         <Info className="w-3.5 h-3.5 text-neutral-400 cursor-help" />
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1.5 bg-neutral-800 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-          <div className="mb-1"><span className="font-medium">后台模式：</span>无界面运行</div>
+          <div className="mb-1"><span className="font-medium">后台模式：</span>无界面执行</div>
           <div><span className="font-medium">前台模式：</span>显示浏览器窗口</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type ViewMode = 'debug' | 'compact'
+
+function ViewModeToggle({ 
+  mode, 
+  onChange 
+}: { 
+  mode: ViewMode
+  onChange: (mode: ViewMode) => void 
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <div className="flex items-center bg-neutral-100 rounded-md p-0.5 border border-neutral-200">
+        <button
+          onClick={() => onChange('debug')}
+          className={`px-2.5 py-1 text-xs font-medium rounded transition-all ${
+            mode === 'debug'
+              ? 'bg-white text-neutral-900 shadow-sm'
+              : 'text-neutral-500 hover:text-neutral-700'
+          }`}
+        >
+          调试
+        </button>
+        <button
+          onClick={() => onChange('compact')}
+          className={`px-2.5 py-1 text-xs font-medium rounded transition-all ${
+            mode === 'compact'
+              ? 'bg-white text-neutral-900 shadow-sm'
+              : 'text-neutral-500 hover:text-neutral-700'
+          }`}
+        >
+          简洁
+        </button>
+      </div>
+      <div className="relative group">
+        <Info className="w-3.5 h-3.5 text-neutral-400 cursor-help" />
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1.5 bg-neutral-800 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+          <div className="mb-1"><span className="font-medium">调试模式：</span>完整面板</div>
+          <div><span className="font-medium">简洁模式：</span>简化显示</div>
         </div>
       </div>
     </div>
@@ -266,6 +310,11 @@ function ExecutionModeToggle({
       <div className="flex items-center gap-2 md:gap-3">
         {currentWorkflow && (
           <>
+            <ViewModeToggle 
+              mode={viewMode} 
+              onChange={setViewMode} 
+            />
+
             <ExecutionModeToggle 
               mode={executionMode} 
               onChange={setExecutionMode} 

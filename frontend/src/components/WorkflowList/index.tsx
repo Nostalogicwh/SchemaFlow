@@ -5,7 +5,9 @@ import type { WorkflowListItem } from '@/types/workflow'
 import { workflowApi } from '@/api'
 import { LoadingSpinner, EmptyState } from '@/components/common'
 import { Modal } from '@/components/ui/Modal'
-import { Search, FileText, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Search, FileText, Plus, RefreshCw, Trash2, Play } from 'lucide-react'
+import { useExecutionStore } from '@/stores/executionStore'
+import { useExecution } from '@/hooks/useExecution'
 import { Input } from '@/components/ui/Input'
 import { FormField } from '@/components/ui/FormField'
 import { Button } from '@/components/ui/Button'
@@ -43,6 +45,21 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
   const [nameError, setNameError] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const refreshList = useWorkflowStore((state) => state.refreshList)
+  const { setViewMode, setShowPanel, setCurrentWorkflowId } = useExecutionStore()
+  const { startExecution } = useExecution()
+
+  const handleQuickExecute = (workflowId: string) => {
+    // 选中工作流
+    onSelect(workflowId)
+    // 设置当前工作流ID
+    setCurrentWorkflowId(workflowId)
+    // 切换到简洁模式
+    setViewMode('compact')
+    // 显示执行面板
+    setShowPanel(true)
+    // 开始执行
+    startExecution(workflowId, 'headless')
+  }
 
   const handleOpenCreateModal = () => {
     setNewWorkflowName('')
@@ -231,17 +248,31 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
                       </p>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    iconOnly
-                    onClick={(e) => handleDelete(workflow.id, e as React.MouseEvent)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity -mr-1"
-                    title="删除工作流"
-                    aria-label={`删除工作流: ${workflow.name}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-neutral-400 hover:text-red-500" />
-                  </Button>
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleQuickExecute(workflow.id)
+                      }}
+                      title="快速执行"
+                      aria-label={`快速执行: ${workflow.name}`}
+                    >
+                      <Play className="w-3.5 h-3.5 text-neutral-400 hover:text-green-500" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
+                      onClick={(e) => handleDelete(workflow.id, e as React.MouseEvent)}
+                      title="删除工作流"
+                      aria-label={`删除工作流: ${workflow.name}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-neutral-400 hover:text-red-500" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}

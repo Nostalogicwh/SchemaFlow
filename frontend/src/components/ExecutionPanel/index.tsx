@@ -12,7 +12,7 @@ type TabType = 'screenshot' | 'nodes' | 'logs'
 type LogLevelFilter = 'all' | 'info' | 'warning' | 'error'
 
 export function ExecutionPanel() {
-  const { executionState, isConnected } = useExecutionStore()
+  const { executionState, isConnected, viewMode } = useExecutionStore()
   const { stopExecution, respondUserInput } = useExecution()
 
   const { isRunning, screenshot, logs, userInputRequest, nodeRecords } = executionState
@@ -62,56 +62,103 @@ export function ExecutionPanel() {
         />
       )}
 
-      {/* Tabs */}
-      <div className={`flex border-b ${twSemanticColors.border.default}`}>
-        {([
-          ['screenshot', '截图'],
-          ['nodes', '节点记录'],
-          ['logs', '日志'],
-        ] as [TabType, string][]).map(([tab, label]) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`
-              relative px-4 py-2.5 text-sm font-medium
-              ${twTransitions.normal}
-              ${activeTab === tab
-                ? twSemanticColors.text.primary
-                : twSemanticColors.text.secondary + ' hover:text-neutral-700'
-              }
-            `}
-          >
-            {label}
-            {tab === 'nodes' && nodeRecords.length > 0 && (
-              <span className={`ml-1.5 text-xs ${twSemanticColors.text.tertiary}`}>
-                ({nodeRecords.length})
-              </span>
+      {/* 根据 viewMode 渲染不同布局 */}
+      {viewMode === 'compact' ? (
+        <CompactModeLayout />
+      ) : (
+        <>
+          {/* Tabs */}
+          <div className={`flex border-b ${twSemanticColors.border.default}`}>
+            {([
+              ['screenshot', '截图'],
+              ['nodes', '节点记录'],
+              ['logs', '日志'],
+            ] as [TabType, string][]).map(([tab, label]) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`
+                  relative px-4 py-2.5 text-sm font-medium
+                  ${twTransitions.normal}
+                  ${activeTab === tab
+                    ? twSemanticColors.text.primary
+                    : twSemanticColors.text.secondary + ' hover:text-neutral-700'
+                  }
+                `}
+              >
+                {label}
+                {tab === 'nodes' && nodeRecords.length > 0 && (
+                  <span className={`ml-1.5 text-xs ${twSemanticColors.text.tertiary}`}>
+                    ({nodeRecords.length})
+                  </span>
+                )}
+                {/* Active indicator */}
+                <span
+                  className={`
+                    absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500
+                    ${twTransitions.normal}
+                    ${activeTab === tab ? 'opacity-100' : 'opacity-0'}
+                  `}
+                />
+              </button>
+            ))}
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-hidden">
+            {activeTab === 'screenshot' && (
+              <ScreenshotView screenshot={screenshot} />
             )}
-            {/* Active indicator */}
-            <span
-              className={`
-                absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500
-                ${twTransitions.normal}
-                ${activeTab === tab ? 'opacity-100' : 'opacity-0'}
-              `}
-            />
-          </button>
-        ))}
+
+            {activeTab === 'nodes' && (
+              <NodeRecordList records={nodeRecords} />
+            )}
+
+            {activeTab === 'logs' && (
+              <LogViewer logs={logs} />
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// 简洁模式布局组件
+function CompactModeLayout() {
+  const { executionState } = useExecutionStore()
+  const { screenshot, nodeRecords, logs } = executionState
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* 节点列表 */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <h3 className="text-sm font-medium mb-2">节点列表</h3>
+        <NodeRecordList records={nodeRecords} />
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-hidden">
-        {activeTab === 'screenshot' && (
-          <ScreenshotView screenshot={screenshot} />
-        )}
+      {/* 实时截图 */}
+      <div className="h-1/3 border-t border-gray-200">
+        <h3 className="text-sm font-medium p-2">实时截图</h3>
+        <div className="h-full overflow-auto p-2">
+          {screenshot ? (
+            <img
+              src={`data:image/jpeg;base64,${screenshot}`}
+              alt="执行截图"
+              className="max-w-full rounded"
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+              等待截图...
+            </div>
+          )}
+        </div>
+      </div>
 
-        {activeTab === 'nodes' && (
-          <NodeRecordList records={nodeRecords} />
-        )}
-
-        {activeTab === 'logs' && (
-          <LogViewer logs={logs} />
-        )}
+      {/* 日志 */}
+      <div className="h-1/4 border-t border-gray-200">
+        <h3 className="text-sm font-medium p-2">日志</h3>
+        <LogViewer logs={logs} compact />
       </div>
     </div>
   )
@@ -323,7 +370,7 @@ function ScreenshotModal({
   )
 }
 
-function LogViewer({ logs }: { logs: WSLog[] }) {
+function LogViewer({ logs, compact = false }: { logs: WSLog[]; compact?: boolean }) {
   const [levelFilter, setLevelFilter] = useState<LogLevelFilter>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
@@ -389,61 +436,63 @@ function LogViewer({ logs }: { logs: WSLog[] }) {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Filter Toolbar */}
-      <div className={`px-3 py-2 border-b ${twSemanticColors.border.default} ${twSemanticColors.bg.sunken} flex items-center gap-2`}>
-        <div className="flex items-center gap-1">
-          {filterButtons.map(({ level, label }) => {
-            const isActive = levelFilter === level
-            const variant = isActive ? 'secondary' : 'ghost'
-            
-            return (
+      {/* Filter Toolbar - 简洁模式下隐藏 */}
+      {!compact && (
+        <div className={`px-3 py-2 border-b ${twSemanticColors.border.default} ${twSemanticColors.bg.sunken} flex items-center gap-2`}>
+          <div className="flex items-center gap-1">
+            {filterButtons.map(({ level, label }) => {
+              const isActive = levelFilter === level
+              const variant = isActive ? 'secondary' : 'ghost'
+              
+              return (
+                <Button
+                  key={level}
+                  onClick={() => setLevelFilter(level)}
+                  variant={variant}
+                  size="sm"
+                  className={isActive ? 'bg-white border-neutral-200' : ''}
+                >
+                  {label}
+                  <span className={`ml-1 text-xs ${isActive ? twSemanticColors.text.secondary : twSemanticColors.text.tertiary}`}>
+                    {levelCounts[level]}
+                  </span>
+                </Button>
+              )
+            })}
+          </div>
+          <div className="flex-1" />
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="搜索日志..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`
+                w-48 px-3 py-1.5 text-xs rounded-md border
+                ${twSemanticColors.bg.surface}
+                ${twSemanticColors.border.default}
+                ${twSemanticColors.text.primary}
+                placeholder:text-neutral-400
+                focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent
+                ${twTransitions.normal}
+              `}
+            />
+            {searchTerm && (
               <Button
-                key={level}
-                onClick={() => setLevelFilter(level)}
-                variant={variant}
+                onClick={() => setSearchTerm('')}
+                variant="ghost"
                 size="sm"
-                className={isActive ? 'bg-white border-neutral-200' : ''}
+                iconOnly
+                className="absolute right-1 top-1/2 -translate-y-1/2"
               >
-                {label}
-                <span className={`ml-1 text-xs ${isActive ? twSemanticColors.text.secondary : twSemanticColors.text.tertiary}`}>
-                  {levelCounts[level]}
-                </span>
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </Button>
-            )
-          })}
+            )}
+          </div>
         </div>
-        <div className="flex-1" />
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="搜索日志..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className={`
-              w-48 px-3 py-1.5 text-xs rounded-md border
-              ${twSemanticColors.bg.surface}
-              ${twSemanticColors.border.default}
-              ${twSemanticColors.text.primary}
-              placeholder:text-neutral-400
-              focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent
-              ${twTransitions.normal}
-            `}
-          />
-          {searchTerm && (
-            <Button
-              onClick={() => setSearchTerm('')}
-              variant="ghost"
-              size="sm"
-              iconOnly
-              className="absolute right-1 top-1/2 -translate-y-1/2"
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </Button>
-          )}
-        </div>
-      </div>
+      )}
       
       {/* Log List */}
       <div
