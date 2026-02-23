@@ -294,7 +294,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
       >
         {showPanel && (
           <>
-            <div className="p-2 border-b flex justify-between items-center">
+            <div className="p-2 border-b border-gray-200 flex justify-between items-center">
               <span className="font-medium text-sm">属性</span>
               <div className="flex items-center gap-2">
                 {onSave && (

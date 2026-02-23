@@ -19,7 +19,6 @@ export function Toast() {
   if (toasts.length === 0) return null
 
   return (
-    // 将弹窗位置从右上角改为顶部居中，避免超出右侧显示范围
     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 max-w-[90vw]">
       {toasts.map((toast) => (
         <div

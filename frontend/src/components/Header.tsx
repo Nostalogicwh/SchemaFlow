@@ -226,7 +226,7 @@ function ExecutionModeToggle({
       </div>
       <div className="relative group">
         <Info className="w-3.5 h-3.5 text-neutral-400 cursor-help" />
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1.5 bg-neutral-800 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1.5 bg-neutral-800 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
           <div className="mb-1"><span className="font-medium">后台模式：</span>无界面执行</div>
           <div><span className="font-medium">前台模式：</span>显示浏览器窗口</div>
         </div>

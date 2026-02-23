@@ -99,7 +99,7 @@ function App() {
             />
           )}
           {sidebarCollapsed && (
-            <div className="h-full flex items-center justify-center border-r">
+            <div className="h-full flex items-center justify-center border-r border-gray-200">
               <button
                 onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
                 className="p-2 hover:bg-gray-100 rounded"

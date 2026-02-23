@@ -43,7 +43,7 @@ function BaseNodeComponent({
   return (
     <div
       className={`
-        relative flex items-stretch rounded-lg overflow-hidden
+        relative flex items-stretch rounded-lg
         min-w-[140px] shadow-sm
         hover:-translate-y-0.5 hover:shadow-md
         transition-all duration-200 ease-out

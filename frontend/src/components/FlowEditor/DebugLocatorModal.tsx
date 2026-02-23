@@ -183,7 +183,7 @@ export function DebugLocatorModal({
         )}
 
         {/* 操作按钮 */}
-        <div className="flex justify-end gap-2 pt-4 border-t">
+        <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
           <Button onClick={onClose} variant="secondary">
             取消
           </Button>
