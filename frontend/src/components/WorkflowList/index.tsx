@@ -1,11 +1,11 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { confirm as confirmDialog, toast } from '@/stores/uiStore'
-import type { WorkflowListItem } from '@/types/workflow'
-import { workflowApi } from '@/api'
 import { LoadingSpinner, EmptyState } from '@/components/common'
 import { Modal } from '@/components/ui/Modal'
-import { Search, FileText, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Search, FileText, Plus, Trash2, Play } from 'lucide-react'
+import { useExecutionStore } from '@/stores/executionStore'
+import { useExecution } from '@/hooks/useExecution'
 import { Input } from '@/components/ui/Input'
 import { FormField } from '@/components/ui/FormField'
 import { Button } from '@/components/ui/Button'
@@ -14,7 +14,6 @@ interface WorkflowListProps {
   selectedId: string | null
   onSelect: (id: string) => void
   onCreate?: () => void
-  refreshKey?: number
 }
 
 function formatRelativeTime(dateStr?: string): string {
@@ -33,16 +32,27 @@ function formatRelativeTime(dateStr?: string): string {
   return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 
-export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: WorkflowListProps) {
-  const [workflows, setWorkflows] = useState<WorkflowListItem[]>([])
-  const [loading, setLoading] = useState(true)
+export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListProps) {
+  const { workflows, isLoadingList, loadWorkflows, removeWorkflowFromList } = useWorkflowStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [newWorkflowName, setNewWorkflowName] = useState('')
   const [newWorkflowDescription, setNewWorkflowDescription] = useState('')
   const [nameError, setNameError] = useState('')
   const [isCreating, setIsCreating] = useState(false)
-  const refreshList = useWorkflowStore((state) => state.refreshList)
+  const { setShowPanel, setCurrentWorkflowId } = useExecutionStore()
+  const { startExecution } = useExecution()
+
+  const handleQuickExecute = (workflowId: string) => {
+    // 选中工作流
+    onSelect(workflowId)
+    // 设置当前工作流ID
+    setCurrentWorkflowId(workflowId)
+    // 显示执行面板
+    setShowPanel(true)
+    // 开始执行
+    startExecution(workflowId, 'headless')
+  }
 
   const handleOpenCreateModal = () => {
     setNewWorkflowName('')
@@ -78,19 +88,12 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
 
     setIsCreating(true)
     try {
-      const newWorkflow = await workflowApi.create({
-        name: newWorkflowName.trim(),
-        description: newWorkflowDescription.trim() || undefined,
-        nodes: [],
-        edges: [],
-      })
-      
-      setWorkflows((prev) => [newWorkflow, ...prev])
-      refreshList()
-      handleCloseCreateModal()
+      const newWorkflow = await useWorkflowStore.getState().createWorkflow(newWorkflowName.trim())
+      setNewWorkflowName('')
+      setNewWorkflowDescription('')
+      setNameError('')
+      setIsCreateModalOpen(false)
       toast.success('工作流创建成功')
-      
-      // 自动选中新创建的工作流
       onSelect(newWorkflow.id)
     } catch (error) {
       console.error('创建工作流失败:', error)
@@ -109,21 +112,9 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
     setNewWorkflowDescription(e.target.value)
   }
 
-  const loadWorkflows = async () => {
-    try {
-      setLoading(true)
-      const list = await workflowApi.list()
-      setWorkflows(list)
-    } catch (error) {
-      console.error('加载工作流列表失败:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
     loadWorkflows()
-  }, [refreshKey])
+  }, [])
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -131,9 +122,9 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
     if (!confirmed) return
 
     try {
+      const { workflowApi } = await import('@/api')
       await workflowApi.delete(id)
-      setWorkflows((prev) => prev.filter((w) => w.id !== id))
-      refreshList()
+      removeWorkflowFromList(id)
     } catch (error) {
       console.error('删除工作流失败:', error)
     }
@@ -149,7 +140,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
     )
   }, [workflows, searchQuery])
 
-  if (loading) {
+  if (isLoadingList && workflows.length === 0) {
     return (
       <div className="h-full flex items-center justify-center">
         <LoadingSpinner label="加载中..." />
@@ -231,17 +222,31 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
                       </p>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    iconOnly
-                    onClick={(e) => handleDelete(workflow.id, e as React.MouseEvent)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity -mr-1"
-                    title="删除工作流"
-                    aria-label={`删除工作流: ${workflow.name}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-neutral-400 hover:text-red-500" />
-                  </Button>
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleQuickExecute(workflow.id)
+                      }}
+                      title="快速执行"
+                      aria-label={`快速执行: ${workflow.name}`}
+                    >
+                      <Play className="w-3.5 h-3.5 text-neutral-400 hover:text-green-500" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
+                      onClick={(e) => handleDelete(workflow.id, e as React.MouseEvent)}
+                      title="删除工作流"
+                      aria-label={`删除工作流: ${workflow.name}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-neutral-400 hover:text-red-500" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -253,8 +258,9 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
         <Button
           variant="ghost"
           size="sm"
-          icon={<RefreshCw className="w-3.5 h-3.5" />}
           onClick={loadWorkflows}
+          disabled={isLoadingList}
+          loading={isLoadingList}
           className="w-full"
         >
           刷新列表

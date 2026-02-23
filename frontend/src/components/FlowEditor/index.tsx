@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { toast } from '@/stores/uiStore'
 import {
   ReactFlow,
   Background,
@@ -21,8 +20,8 @@ import { nodeTypes, nodeCategoryMap } from './nodes'
 import { NodePanel } from './panels/NodePanel'
 import { Toolbar } from './panels/Toolbar'
 import { useExecutionStore } from '@/stores/executionStore'
+import { useActionStore } from '@/stores/actionStore'
 import type { ActionMetadata, Workflow, WorkflowNode, WorkflowEdge, NodeStatus } from '@/types/workflow'
-import { actionApi } from '@/api'
 
 type FlowNodeData = {
   label: string
@@ -101,11 +100,11 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
   const [nodes, setNodes, onNodesState] = useNodesState<FlowNode>([])
   const [edges, setEdges, onEdgesState] = useEdgesState<Edge>([])
   const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null)
-  const [actions, setActions] = useState<ActionMetadata[]>([])
   const [showPanel] = useState(true)
   const [showMiniMap] = useState(true)
   const { screenToFlowPosition } = useReactFlow()
 
+  const { actions, loadActions } = useActionStore()
   const storeNodeStatuses = useExecutionStore((state) => state.executionState.nodeStatuses)
   const nodeStatuses = externalNodeStatuses || storeNodeStatuses
 
@@ -113,7 +112,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
   const onEdgesChange = onEdgesState
 
   useEffect(() => {
-    actionApi.list().then(setActions).catch(console.error)
+    loadActions()
   }, [])
 
   useEffect(() => {
@@ -260,12 +259,11 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
     if (!workflow || !onSave) return
     const updatedWorkflow = flowToWorkflow(nodes, edges, workflow)
     onSave(updatedWorkflow)
-    toast.success('工作流已保存')
   }, [workflow, nodes, edges, onSave])
 
   return (
     <div className="flex h-full relative">
-      <div className="border-r bg-white shrink-0 w-48">
+      <div className="border-r border-gray-200 bg-white shrink-0 w-48 shadow-sm">
         <Toolbar actions={actions} hasNodes={nodes.length > 0} onAIGenerate={handleAIGenerate} />
       </div>
 
@@ -290,13 +288,13 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
       </div>
 
       <div
-        className={`border-l bg-white overflow-y-auto shrink-0 transition-all duration-300 ${
+        className={`border-l border-gray-200 bg-white overflow-y-auto shrink-0 transition-all duration-300 shadow-sm ${
           showPanel ? 'w-80' : 'w-0 overflow-hidden'
         }`}
       >
         {showPanel && (
           <>
-            <div className="p-2 border-b flex justify-between items-center">
+            <div className="p-2 border-b border-gray-200 flex justify-between items-center">
               <span className="font-medium text-sm">属性</span>
               <div className="flex items-center gap-2">
                 {onSave && (

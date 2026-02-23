@@ -9,15 +9,17 @@ import { useWorkflowStore } from '@/stores/workflowStore'
 import { useExecutionStore } from '@/stores/executionStore'
 import { toast } from '@/stores/uiStore'
 import { useExecution } from '@/hooks/useExecution'
+import { useErrorHandler } from '@/hooks/useErrorHandler'
 import { workflowApi } from '@/api'
 
 function App() {
-  const { currentWorkflow, selectedId, saveWorkflow, listVersion } = useWorkflowStore()
+  const { currentWorkflow, selectedId, saveWorkflow } = useWorkflowStore()
 
   const { showPanel, executionMode, executionState, setShowPanel } =
     useExecutionStore()
 
   const { connect, startExecution, stopExecution, reset: resetExecution } = useExecution()
+  const handleError = useErrorHandler()
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
@@ -30,9 +32,9 @@ function App() {
       setShowPanel(true)
       setTimeout(() => startExecution(selectedId, executionMode), 500)
     } catch (error) {
-      console.error('执行工作流失败:', error)
+      handleError(error, '执行工作流失败')
     }
-  }, [selectedId, connect, startExecution, executionMode, setShowPanel])
+  }, [selectedId, connect, startExecution, executionMode, setShowPanel, handleError])
 
   const handleSelectWorkflow = useCallback(
     async (id: string) => {
@@ -40,10 +42,10 @@ function App() {
         await useWorkflowStore.getState().selectWorkflow(id)
         resetExecution()
       } catch (error) {
-        console.error('加载工作流失败:', error)
+        handleError(error, '加载工作流失败')
       }
     },
-    [resetExecution]
+    [resetExecution, handleError]
   )
 
   const handleCreateWorkflow = useCallback(async () => {
@@ -53,9 +55,9 @@ function App() {
     try {
       await useWorkflowStore.getState().createWorkflow(name)
     } catch (error) {
-      console.error('创建工作流失败:', error)
+      handleError(error, '创建工作流失败')
     }
-  }, [])
+  }, [handleError])
 
   const handleSaveWorkflow = useCallback(
     async (workflow: typeof currentWorkflow) => {
@@ -64,11 +66,10 @@ function App() {
         await saveWorkflow(workflow)
         toast.success('保存成功')
       } catch (error) {
-        console.error('保存工作流失败:', error)
-        toast.error('保存失败')
+        handleError(error, '保存工作流失败')
       }
     },
-    [saveWorkflow]
+    [saveWorkflow, handleError]
   )
 
   return (
@@ -86,7 +87,7 @@ function App() {
 
       <div className="flex-1 flex overflow-hidden relative">
         <aside
-          className={`bg-white border-r shrink-0 transition-all duration-300 ease-in-out ${
+          className={`bg-white border-r border-gray-200 shrink-0 transition-all duration-300 ease-in-out ${
             sidebarCollapsed ? 'w-14' : 'w-56'
           }`}
         >
@@ -95,11 +96,10 @@ function App() {
               selectedId={selectedId}
               onSelect={handleSelectWorkflow}
               onCreate={handleCreateWorkflow}
-              refreshKey={listVersion}
             />
           )}
           {sidebarCollapsed && (
-            <div className="h-full flex items-center justify-center border-r">
+            <div className="h-full flex items-center justify-center border-r border-gray-200">
               <button
                 onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
                 className="p-2 hover:bg-gray-100 rounded"
@@ -133,7 +133,7 @@ function App() {
         </main>
 
         {showPanel && (
-          <aside className="w-96 border-l shrink-0 bg-white">
+          <aside className="w-96 border-l border-gray-200 shrink-0 bg-white shadow-sm">
             <ExecutionPanel />
           </aside>
         )}

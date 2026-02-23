@@ -1,11 +1,12 @@
 """FastAPI 依赖注入提供者。"""
+
 from functools import lru_cache
 
 from engine.executor import WorkflowExecutor
-from storage.file_storage import JSONFileStorage
+from persistence.file_storage import JSONFileStorage
+from persistence.base import ExecutionRepository
+from persistence.json_store import JSONExecutionRepository
 from api.websocket import ConnectionManager
-from repository.base import ExecutionRepository
-from repository.json_repository import JSONExecutionRepository
 
 
 @lru_cache()

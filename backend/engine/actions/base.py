@@ -1,4 +1,5 @@
 """基础节点 - 开始和结束节点。"""
+
 from typing import Dict, Any
 from ..actions import register_action
 
@@ -8,12 +9,9 @@ from ..actions import register_action
     label="开始",
     description="工作流的起始点",
     category="base",
-    parameters={
-        "type": "object",
-        "properties": {},
-        "required": []
-    },
-    outputs=["flow"]
+    parameters={"type": "object", "properties": {}, "required": []},
+    outputs=["flow"],
+    disable_ai_intervention=True,
 )
 async def start_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """执行开始节点。
@@ -34,12 +32,9 @@ async def start_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     label="结束",
     description="工作流的结束点",
     category="base",
-    parameters={
-        "type": "object",
-        "properties": {},
-        "required": []
-    },
-    inputs=["flow"]
+    parameters={"type": "object", "properties": {}, "required": []},
+    inputs=["flow"],
+    disable_ai_intervention=True,
 )
 async def end_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """执行结束节点。

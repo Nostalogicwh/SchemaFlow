@@ -58,7 +58,7 @@ function EditableWorkflowName({ workflow }: { workflow: Workflow }) {
     if (trimmedName !== workflow.name) {
       try {
         await saveWorkflow({ ...workflow, name: trimmedName })
-        useWorkflowStore.getState().refreshList()
+        useWorkflowStore.getState().updateWorkflowInList(workflow.id, { name: trimmedName })
         toast.success('名称已更新')
       } catch (error) {
         console.error('更新名称失败:', error)
@@ -133,7 +133,7 @@ function ExecuteButton({
           size="sm"
           icon={<Play className="w-4 h-4" />}
         >
-          再次运行
+          重新执行
         </Button>
       )
     case 'error':
@@ -155,7 +155,7 @@ function ExecuteButton({
           size="sm"
           icon={<Play className="w-4 h-4" />}
         >
-          运行
+          执行
         </Button>
       )
   }
@@ -226,8 +226,8 @@ function ExecutionModeToggle({
       </div>
       <div className="relative group">
         <Info className="w-3.5 h-3.5 text-neutral-400 cursor-help" />
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1.5 bg-neutral-800 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-          <div className="mb-1"><span className="font-medium">后台模式：</span>无界面运行</div>
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1.5 bg-neutral-800 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+          <div className="mb-1"><span className="font-medium">后台模式：</span>无界面执行</div>
           <div><span className="font-medium">前台模式：</span>显示浏览器窗口</div>
         </div>
       </div>

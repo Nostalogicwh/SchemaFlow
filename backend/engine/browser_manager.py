@@ -1,4 +1,5 @@
 """浏览器管理器 - 负责浏览器连接和生命周期管理。"""
+
 import logging
 from typing import Tuple, Optional, List
 import socket
@@ -19,7 +20,7 @@ class BrowserManager:
     - 自动发现 Chrome 调试端口
     - 页面复用逻辑
     - 资源清理
-    
+
     重要：本管理器不存储任何用户数据到服务端，所有登录态依赖本地 Chrome
     """
 
@@ -44,23 +45,23 @@ class BrowserManager:
     def _find_chrome_debug_ports(self) -> List[int]:
         """查找所有开放的 Chrome 调试端口。"""
         open_ports = []
-        
+
         # 检查常见端口
         for port in self.COMMON_DEBUG_PORTS:
             if self._check_port_open("127.0.0.1", port):
                 # 验证是否是 Chrome 调试端口
                 try:
                     import urllib.request
+
                     with urllib.request.urlopen(
-                        f"http://127.0.0.1:{port}/json/version", 
-                        timeout=2
+                        f"http://127.0.0.1:{port}/json/version", timeout=2
                     ) as response:
-                        data = response.read().decode('utf-8')
+                        data = response.read().decode("utf-8")
                         if "Browser" in data or "Chrome" in data:
                             open_ports.append(port)
                 except Exception:
                     pass
-        
+
         return open_ports
 
     def _get_chrome_launch_command(self) -> str:
@@ -83,142 +84,119 @@ class BrowserManager:
                 "  > /tmp/chrome.log 2>&1 &"
             )
 
-    async def connect(self, context, headless: bool = True) -> Tuple[bool, bool]:
+    async def connect(
+        self, context, headless: bool = True, storage_state=None
+    ) -> Tuple[bool, bool]:
         """连接浏览器。
 
-        自动发现本地 Chrome 的调试端口并连接。
+        启动独立浏览器，支持注入 storage_state 恢复登录态。
 
         Args:
             context: 执行上下文
-            headless: 是否无头模式（仅独立浏览器有效）
+            headless: 是否无头模式
+            storage_state: 可选，前端传入的凭证 JSON，直接注入 context
 
         Returns:
-            (is_cdp, reused_page) - 是否 CDP 模式和是否复用页面
+            (is_cdp, reused_page) - 固定返回 (False, False)，保留接口兼容
         """
         logger.info(f"[{context.execution_id}] 浏览器连接开始")
         await context.log("debug", f"BrowserManager.connect() 开始")
 
-        if context.browser is not None and context.page is None:
-            # browser存在但page被关闭，需要创建新页面
-            is_cdp = getattr(context, '_is_cdp', False)
-            await context.log("info", f"Browser已连接，创建新页面（CDP模式: {is_cdp}）")
-            if is_cdp and context.browser.contexts:
-                default_context = context.browser.contexts[0]
-                context.page = await default_context.new_page()
-                await context.log("info", "在现有 BrowserContext 中创建新页面（保持登录态）")
-            else:
-                context.page = await context.browser.new_page()
-            context._reused_page = False
-            return is_cdp, False
-
-        if context.browser is not None or context.page is not None:
-            is_cdp = getattr(context, '_is_cdp', False)
-            reused_page = getattr(context, '_reused_page', False)
-            await context.log("debug", f"浏览器已连接，复用现有状态")
-            return is_cdp, reused_page
+        if context.browser is not None:
+            is_cdp = getattr(context, "_is_cdp", False)
+            await context.log("info", f"浏览器已连接，复用现有状态")
+            return is_cdp, getattr(context, "_reused_page", False)
 
         from playwright.async_api import async_playwright
+
         self.playwright = await async_playwright().start()
 
-        # 自动发现 Chrome 调试端口
-        await context.log("info", "正在搜索本地 Chrome 调试端口...")
-        available_ports = self._find_chrome_debug_ports()
-        
-        if available_ports:
-            await context.log("info", f"发现 {len(available_ports)} 个 Chrome 调试端口: {available_ports}")
-        else:
-            await context.log("warn", "未发现任何 Chrome 调试端口")
+        # 仅当用户在 settings 中明确配置了 cdp_url 时才尝试 CDP
+        cdp_url = None
+        try:
+            from config import get_settings
 
-        # 尝试连接第一个可用的端口
-        for port in available_ports:
-            cdp_url = f"http://127.0.0.1:{port}"
+            cdp_url = get_settings().get("browser", {}).get("cdp_url_manual")
+        except Exception:
+            pass
+
+        if cdp_url:
             try:
-                await context.log("info", f"尝试连接 Chrome (端口 {port})...")
-                context.browser = await self.playwright.chromium.connect_over_cdp(cdp_url)
-                self._connected_port = port
-                
-                default_context = context.browser.contexts[0]
-                existing_pages = default_context.pages
-                
-                await context.log("info", f"✓ 成功连接到 Chrome (端口 {port})")
-                logger.info(f"[{context.execution_id}] 浏览器连接成功: 端口 {port}, 已有页面 {len(existing_pages)} 个")
-                await context.log("info", f"  已有页面: {len(existing_pages)} 个")
-                
-                for i, p in enumerate(existing_pages[:3]):  # 只显示前3个
-                    await context.log("info", f"    - {p.url[:80]}{'...' if len(p.url) > 80 else ''}")
+                await context.log("info", f"尝试 CDP 连接: {cdp_url}")
+                context.browser = await self.playwright.chromium.connect_over_cdp(
+                    cdp_url
+                )
+                self._connected_port = 0
 
-                # 寻找可复用的页面
-                reused = None
-                for p in existing_pages:
-                    if p.url and p.url != "about:blank":
-                        reused = p
-                        break
-
-                if reused:
-                    context.page = reused
-                    context._reused_page = True
-                    await context.log("info", f"✓ 复用已有页面: {reused.url[:60]}...")
+                if storage_state:
+                    cookies_count = len(storage_state.get("cookies", []))
+                    origins_count = len(storage_state.get("origins", []))
+                    logger.info(
+                        f"[{context.execution_id}] CDP模式注入凭证: cookies={cookies_count}, origins={origins_count}"
+                    )
+                    context._context = await context.browser.new_context(
+                        storage_state=storage_state
+                    )
+                    context.page = await context._context.new_page()
+                    await context.log(
+                        "info", f"CDP模式已注入凭证 (cookies={cookies_count})"
+                    )
                 else:
+                    logger.info(f"[{context.execution_id}] CDP模式复用现有浏览器上下文")
+                    default_context = context.browser.contexts[0]
                     context.page = await default_context.new_page()
-                    context._reused_page = False
-                    await context.log("info", "创建新页面")
 
                 context._is_cdp = True
-                return True, context._reused_page
+                context._reused_page = False
+                context._headless = False
+                await context.log("info", f"✓ CDP 连接成功")
+                return True, False
+            except Exception as e:
+                await context.log("warning", f"CDP 连接失败: {e}，回退到独立浏览器")
 
-            except Error as e:
-                await context.log("debug", f"端口 {port} 连接失败: {e}")
-                continue
-
-        # 所有端口都连接失败
-        logger.warning(f"[{context.execution_id}] 无法连接到本地 Chrome 调试端口，启动独立浏览器")
-        await context.log("error", "=" * 70)
-        await context.log("error", "无法连接到本地 Chrome")
-        await context.log("error", "=" * 70)
-        await context.log("error", "")
-        await context.log("error", "检测到您正在运行的 Chrome 没有开启远程调试端口。")
-        await context.log("error", "")
-        await context.log("error", "解决方案（二选一）：")
-        await context.log("error", "")
-        await context.log("error", "【方案1】开启当前 Chrome 的调试端口（推荐）：")
-        await context.log("error", "  1. 完全退出 Chrome（Cmd+Q 或右键退出）")
-        await context.log("error", "  2. 在终端执行以下命令重启 Chrome：")
-        await context.log("error", "")
-        await context.log("error", self._get_chrome_launch_command())
-        await context.log("error", "")
-        await context.log("error", "  3. 在 Chrome 中登录 DeepSeek")
-        await context.log("error", "  4. 重新运行工作流")
-        await context.log("error", "")
-        await context.log("error", "【方案2】使用独立浏览器（无登录态）：")
-        await context.log("error", "  工作流将在独立浏览器中运行，需要手动登录")
-        await context.log("error", "")
-        await context.log("error", "=" * 70)
-        
-        # 回退到独立浏览器
-        await context.log("warn", "启动独立浏览器（无登录态）...")
+        # 默认路径：启动独立浏览器
+        await context.log("info", "启动独立浏览器...")
         context.browser = await self.playwright.chromium.launch(headless=headless)
-        context.page = await context.browser.new_page()
+        context._headless = headless
+
+        if storage_state:
+            cookies_count = len(storage_state.get("cookies", []))
+            origins_count = len(storage_state.get("origins", []))
+            logger.info(
+                f"[{context.execution_id}] 注入凭证: cookies={cookies_count}, origins={origins_count}"
+            )
+            context._context = await context.browser.new_context(
+                storage_state=storage_state
+            )
+            await context.log("info", f"已注入登录凭证 (cookies={cookies_count})")
+        else:
+            logger.info(f"[{context.execution_id}] 无历史凭证，使用全新浏览器上下文")
+            context._context = await context.browser.new_context()
+
+        context.page = await context._context.new_page()
         context._is_cdp = False
         context._reused_page = False
+
         return False, False
 
     async def cleanup(self, context):
         """清理浏览器资源。"""
         logger.info(f"[{context.execution_id}] 开始清理浏览器资源")
-        is_cdp = getattr(context, '_is_cdp', False)
-        reused_page = getattr(context, '_reused_page', False)
-        
+        is_cdp = getattr(context, "_is_cdp", False)
+
         if is_cdp:
-            if not reused_page:
+            # CDP 模式下，如果有独立创建的 context，需要关闭
+            custom_context = getattr(context, "_context", None)
+            if custom_context:
                 try:
-                    if context.page and not context.page.is_closed():
-                        await context.page.close()
-                        await context.log("debug", "关闭新创建的页面")
-                except Error:
+                    await custom_context.close()
+                    await context.log("debug", "关闭自定义 context")
+                except Exception:
                     pass
-        elif self.playwright is not None:
+
+        if self.playwright is not None:
             try:
                 await self.playwright.stop()
-                logger.info(f"[{context.execution_id}] 独立浏览器已关闭")
-            except Error:
+                logger.info(f"[{context.execution_id}] 浏览器已关闭")
+            except Exception:
                 pass

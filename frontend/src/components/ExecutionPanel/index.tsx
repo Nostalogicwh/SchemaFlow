@@ -1,31 +1,51 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useExecutionStore } from '@/stores/executionStore'
-import { useExecution } from '@/hooks/useExecution'
 import type { WSLog, WSUserInputRequired } from '@/types/workflow'
 import { EmptyState } from '@/components/common'
 import { Button } from '@/components/ui/Button'
 import { NodeRecordList } from './NodeRecordList'
+import { AIInterventionPrompt } from './AIInterventionPrompt'
 import { twSemanticColors, twColors, twTransitions } from '@/constants/designTokens'
-import { Image, FileText } from 'lucide-react'
-
-type TabType = 'screenshot' | 'nodes' | 'logs'
-type LogLevelFilter = 'all' | 'info' | 'warning' | 'error'
+import { FileText } from 'lucide-react'
 
 export function ExecutionPanel() {
-  const { executionState, isConnected } = useExecutionStore()
-  const { stopExecution, respondUserInput } = useExecution()
+  const { executionState, isConnected, sendWS } = useExecutionStore()
 
-  const { isRunning, screenshot, logs, userInputRequest, nodeRecords } = executionState
-  const [activeTab, setActiveTab] = useState<TabType>('screenshot')
+  const { isRunning, userInputRequest } = executionState
   const [isStopping, setIsStopping] = useState(false)
+
+  const isAIIntervention = userInputRequest?.prompt?.includes('需要人工干预') || false
+  const [showAIIntervention, setShowAIIntervention] = useState(false)
+
+  useEffect(() => {
+    setShowAIIntervention(isAIIntervention)
+  }, [isAIIntervention])
 
   const handleStopExecution = async () => {
     setIsStopping(true)
     try {
-      await stopExecution()
+      sendWS({ type: 'stop_execution' })
+      const execId = executionState.executionId
+      if (execId) {
+        try {
+          await fetch(`/api/executions/${execId}/stop`, { method: 'POST' })
+        } catch (e) {
+          console.error('REST stop 失败:', e)
+        }
+      }
     } finally {
       setIsStopping(false)
     }
+  }
+
+  const respondUserInput = (nodeId: string, action: 'continue' | 'cancel') => {
+    console.log(`[respondUserInput] 发送响应: node_id=${nodeId}, action=${action}`)
+    sendWS({
+      type: 'user_input_response',
+      node_id: nodeId,
+      action,
+    })
+    useExecutionStore.getState().setUserInputRequest(null)
   }
 
   return (
@@ -55,275 +75,118 @@ export function ExecutionPanel() {
         </div>
       </div>
 
-      {userInputRequest && (
+      {/* AI干预提示弹窗 - 仅 AI 干预时显示 */}
+      {userInputRequest && isAIIntervention && (
+        <AIInterventionPrompt
+          isOpen={showAIIntervention}
+          onClose={() => setShowAIIntervention(false)}
+          onConfirm={() => {
+            setShowAIIntervention(false)
+            respondUserInput(userInputRequest.node_id, 'continue')
+          }}
+          onCancel={() => {
+            setShowAIIntervention(false)
+            respondUserInput(userInputRequest.node_id, 'cancel')
+          }}
+        />
+      )}
+
+      {/* 普通用户干预弹窗 - 非 AI 干预时显示 */}
+      {userInputRequest && !isAIIntervention && (
         <UserInputDialog
           request={userInputRequest}
           onResponse={respondUserInput}
         />
       )}
 
-      {/* Tabs */}
-      <div className={`flex border-b ${twSemanticColors.border.default}`}>
-        {([
-          ['screenshot', '截图'],
-          ['nodes', '节点记录'],
-          ['logs', '日志'],
-        ] as [TabType, string][]).map(([tab, label]) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`
-              relative px-4 py-2.5 text-sm font-medium
-              ${twTransitions.normal}
-              ${activeTab === tab
-                ? twSemanticColors.text.primary
-                : twSemanticColors.text.secondary + ' hover:text-neutral-700'
-              }
-            `}
-          >
-            {label}
-            {tab === 'nodes' && nodeRecords.length > 0 && (
-              <span className={`ml-1.5 text-xs ${twSemanticColors.text.tertiary}`}>
-                ({nodeRecords.length})
-              </span>
-            )}
-            {/* Active indicator */}
-            <span
-              className={`
-                absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500
-                ${twTransitions.normal}
-                ${activeTab === tab ? 'opacity-100' : 'opacity-0'}
-              `}
-            />
-          </button>
-        ))}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-hidden">
-        {activeTab === 'screenshot' && (
-          <ScreenshotView screenshot={screenshot} />
-        )}
-
-        {activeTab === 'nodes' && (
-          <NodeRecordList records={nodeRecords} />
-        )}
-
-        {activeTab === 'logs' && (
-          <LogViewer logs={logs} />
-        )}
-      </div>
+      {/* 简洁模式布局 */}
+      <CompactModeLayout />
     </div>
   )
 }
 
-function ScreenshotView({ screenshot }: { screenshot: string | null }) {
-  const [scale, setScale] = useState(1)
-  const [showModal, setShowModal] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const minScale = 0.25
-  const maxScale = 4
+// 简洁模式布局组件
+function CompactModeLayout() {
+  const { executionState } = useExecutionStore()
+  const { screenshot, nodeRecords, logs } = executionState
+  const [screenshotHeight, setScreenshotHeight] = useState(200)
+  const [logsHeight, setLogsHeight] = useState(150)
+  const startYRef = useRef(0)
+  const startHeightRef = useRef(0)
+  const dragTypeRef = useRef<'screenshot' | 'logs' | null>(null)
 
-  const handleWheel = useCallback((e: WheelEvent) => {
+  const handleMouseDown = (type: 'screenshot' | 'logs') => (e: React.MouseEvent) => {
     e.preventDefault()
-    const delta = e.deltaY > 0 ? -0.1 : 0.1
-    setScale((prev) => Math.min(maxScale, Math.max(minScale, prev + delta)))
-  }, [])
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (container) {
-      container.addEventListener('wheel', handleWheel, { passive: false })
-      return () => container.removeEventListener('wheel', handleWheel)
+    dragTypeRef.current = type
+    startYRef.current = e.clientY
+    startHeightRef.current = type === 'screenshot' ? screenshotHeight : logsHeight
+    const onMove = (e: MouseEvent) => {
+      if (!dragTypeRef.current) return
+      const deltaY = e.clientY - startYRef.current
+      if (dragTypeRef.current === 'screenshot') {
+        setScreenshotHeight(Math.min(Math.max(startHeightRef.current - deltaY, 120), 500))
+      } else {
+        setLogsHeight(Math.min(Math.max(startHeightRef.current - deltaY, 100), 400))
+      }
     }
-  }, [handleWheel])
-
-  const zoomIn = () => setScale((prev) => Math.min(maxScale, prev + 0.25))
-  const zoomOut = () => setScale((prev) => Math.max(minScale, prev - 0.25))
-  const resetZoom = () => setScale(1)
+    const onUp = () => {
+      dragTypeRef.current = null
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
 
   return (
-    <>
-      <div className="h-full flex flex-col">
-        {/* Toolbar */}
-        <div className={`flex items-center gap-2 px-3 py-2 border-b ${twSemanticColors.border.default} ${twSemanticColors.bg.sunken}`}>
-          <Button
-            onClick={zoomOut}
-            disabled={scale <= minScale}
-            variant="ghost"
-            size="sm"
-            iconOnly
-            aria-label="缩小"
-            title="缩小"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-            </svg>
-          </Button>
-          <span className={`w-16 text-center text-sm font-medium ${twSemanticColors.text.primary}`}>
-            {Math.round(scale * 100)}%
-          </span>
-          <Button
-            onClick={zoomIn}
-            disabled={scale >= maxScale}
-            variant="ghost"
-            size="sm"
-            iconOnly
-            aria-label="放大"
-            title="放大"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          </Button>
-          <Button
-            onClick={resetZoom}
-            variant="ghost"
-            size="sm"
-          >
-            重置
-          </Button>
-          <span className={`ml-2 text-xs ${twSemanticColors.text.tertiary}`}>
-            滚轮缩放 · 点击查看大图
-          </span>
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex-1 overflow-y-auto p-4 min-h-0">
+        <h3 className="text-sm font-medium mb-2">节点列表</h3>
+        <NodeRecordList records={nodeRecords} />
+      </div>
+
+      <div className="cursor-ns-resize h-1.5 bg-gray-100 hover:bg-blue-400 transition-colors flex-shrink-0"
+        onMouseDown={handleMouseDown('screenshot')}
+      />
+
+      <div className="flex-shrink-0 overflow-hidden" style={{ height: screenshotHeight }}>
+        <div className="flex items-center justify-between px-2 py-1 border-t border-gray-200 bg-gray-50">
+          <h3 className="text-sm font-medium">实时截图</h3>
         </div>
-        
-        {/* Screenshot Area */}
-        <div
-          ref={containerRef}
-          className={`flex-1 overflow-auto p-4 ${twSemanticColors.bg.sunken}`}
-        >
+        <div className="overflow-auto" style={{ height: screenshotHeight - 32 }}>
           {screenshot ? (
             <img
               src={`data:image/jpeg;base64,${screenshot}`}
               alt="执行截图"
-              onClick={() => setShowModal(true)}
-              className="cursor-zoom-in rounded shadow-sm transition-transform origin-top-left"
-              style={{ transform: `scale(${scale})` }}
-              draggable={false}
+              className="max-w-full rounded p-2"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <EmptyState
-                icon={Image}
-                title="暂无截图"
-                description="执行工作流后显示截图"
-              />
+            <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+              等待截图...
             </div>
           )}
         </div>
       </div>
 
-      {showModal && screenshot && (
-        <ScreenshotModal
-          screenshot={screenshot}
-          onClose={() => setShowModal(false)}
-        />
-      )}
-    </>
-  )
-}
-
-function ScreenshotModal({
-  screenshot,
-  onClose,
-}: {
-  screenshot: string
-  onClose: () => void
-}) {
-  const [scale, setScale] = useState(1)
-  const modalRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      } else if (e.key === '+' || e.key === '=') {
-        setScale((prev) => Math.min(4, prev + 0.25))
-      } else if (e.key === '-') {
-        setScale((prev) => Math.max(0.25, prev - 0.25))
-      } else if (e.key === '0') {
-        setScale(1)
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    modalRef.current?.focus()
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
-
-  return (
-    <div
-      ref={modalRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
-      onClick={onClose}
-      tabIndex={0}
-    >
-      {/* Toolbar */}
-      <div className="absolute top-4 right-4 flex items-center gap-2 bg-neutral-800 rounded-lg p-2 text-white">
-        <Button
-          onClick={(e) => {
-            e.stopPropagation()
-            setScale((prev) => Math.max(0.25, prev - 0.25))
-          }}
-          variant="ghost"
-          size="sm"
-          iconOnly
-          className="text-white hover:bg-neutral-700"
-          aria-label="缩小"
-          title="缩小"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-          </svg>
-        </Button>
-        <span className="w-16 text-center text-sm font-medium" aria-live="polite">
-          {Math.round(scale * 100)}%
-        </span>
-        <Button
-          onClick={(e) => {
-            e.stopPropagation()
-            setScale((prev) => Math.min(4, prev + 0.25))
-          }}
-          variant="ghost"
-          size="sm"
-          iconOnly
-          className="text-white hover:bg-neutral-700"
-          aria-label="放大"
-          title="放大"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        </Button>
-        <Button
-          onClick={(e) => {
-            e.stopPropagation()
-            setScale(1)
-          }}
-          variant="ghost"
-          size="sm"
-          className="text-white hover:bg-neutral-700"
-        >
-          重置
-        </Button>
-        <div className="w-px h-4 bg-neutral-600 mx-1" />
-        <span className="text-xs text-neutral-400">ESC 关闭</span>
-      </div>
-      
-      <img
-        src={`data:image/jpeg;base64,${screenshot}`}
-        alt="截图放大"
-        onClick={(e) => e.stopPropagation()}
-        className="max-w-full max-h-full transition-transform"
-        style={{ transform: `scale(${scale})` }}
-        draggable={false}
+      <div className="cursor-ns-resize h-1.5 bg-gray-100 hover:bg-blue-400 transition-colors flex-shrink-0"
+        onMouseDown={handleMouseDown('logs')}
       />
+
+      <div className="flex-shrink-0 overflow-hidden" style={{ height: logsHeight }}>
+        <div className="flex items-center justify-between px-2 py-1 border-t border-gray-200 bg-gray-50">
+          <h3 className="text-sm font-medium">日志</h3>
+        </div>
+        <div className="overflow-auto" style={{ height: logsHeight - 32 }}>
+          <LogViewer logs={logs} compact />
+        </div>
+      </div>
     </div>
   )
 }
 
-function LogViewer({ logs }: { logs: WSLog[] }) {
+type LogLevelFilter = 'all' | 'info' | 'warning' | 'error'
+
+function LogViewer({ logs, compact = false }: { logs: WSLog[]; compact?: boolean }) {
   const [levelFilter, setLevelFilter] = useState<LogLevelFilter>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
@@ -389,61 +252,63 @@ function LogViewer({ logs }: { logs: WSLog[] }) {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Filter Toolbar */}
-      <div className={`px-3 py-2 border-b ${twSemanticColors.border.default} ${twSemanticColors.bg.sunken} flex items-center gap-2`}>
-        <div className="flex items-center gap-1">
-          {filterButtons.map(({ level, label }) => {
-            const isActive = levelFilter === level
-            const variant = isActive ? 'secondary' : 'ghost'
-            
-            return (
+      {/* Filter Toolbar - 简洁模式下隐藏 */}
+      {!compact && (
+        <div className={`px-3 py-2 border-b ${twSemanticColors.border.default} ${twSemanticColors.bg.sunken} flex items-center gap-2`}>
+          <div className="flex items-center gap-1">
+            {filterButtons.map(({ level, label }) => {
+              const isActive = levelFilter === level
+              const variant = isActive ? 'secondary' : 'ghost'
+              
+              return (
+                <Button
+                  key={level}
+                  onClick={() => setLevelFilter(level)}
+                  variant={variant}
+                  size="sm"
+                  className={isActive ? 'bg-white border-neutral-200' : ''}
+                >
+                  {label}
+                  <span className={`ml-1 text-xs ${isActive ? twSemanticColors.text.secondary : twSemanticColors.text.tertiary}`}>
+                    {levelCounts[level]}
+                  </span>
+                </Button>
+              )
+            })}
+          </div>
+          <div className="flex-1" />
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="搜索日志..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`
+                w-48 px-3 py-1.5 text-xs rounded-md border
+                ${twSemanticColors.bg.surface}
+                ${twSemanticColors.border.default}
+                ${twSemanticColors.text.primary}
+                placeholder:text-neutral-400
+                focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent
+                ${twTransitions.normal}
+              `}
+            />
+            {searchTerm && (
               <Button
-                key={level}
-                onClick={() => setLevelFilter(level)}
-                variant={variant}
+                onClick={() => setSearchTerm('')}
+                variant="ghost"
                 size="sm"
-                className={isActive ? 'bg-white border-neutral-200' : ''}
+                iconOnly
+                className="absolute right-1 top-1/2 -translate-y-1/2"
               >
-                {label}
-                <span className={`ml-1 text-xs ${isActive ? twSemanticColors.text.secondary : twSemanticColors.text.tertiary}`}>
-                  {levelCounts[level]}
-                </span>
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </Button>
-            )
-          })}
+            )}
+          </div>
         </div>
-        <div className="flex-1" />
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="搜索日志..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className={`
-              w-48 px-3 py-1.5 text-xs rounded-md border
-              ${twSemanticColors.bg.surface}
-              ${twSemanticColors.border.default}
-              ${twSemanticColors.text.primary}
-              placeholder:text-neutral-400
-              focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent
-              ${twTransitions.normal}
-            `}
-          />
-          {searchTerm && (
-            <Button
-              onClick={() => setSearchTerm('')}
-              variant="ghost"
-              size="sm"
-              iconOnly
-              className="absolute right-1 top-1/2 -translate-y-1/2"
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </Button>
-          )}
-        </div>
-      </div>
+      )}
       
       {/* Log List */}
       <div
@@ -539,29 +404,31 @@ function UserInputDialog({ request, onResponse }: UserInputDialogProps) {
   }
 
   return (
-    <div className={`p-4 border-b ${twSemanticColors.border.default} ${twColors.status.warning.bg}`}>
-      <div className="flex items-start gap-3">
-        <span className="text-2xl">🙋</span>
-        <div className="flex-1">
-          <h4 className={`font-medium ${twColors.status.warning.text}`}>需要用户操作</h4>
-          <p className={`text-sm mt-1 ${twSemanticColors.text.secondary}`}>{request.prompt}</p>
-          <div className="flex gap-2 mt-3">
-            <Button
-              onClick={handleContinue}
-              loading={isContinuing}
-              variant="primary"
-              size="sm"
-            >
-              继续执行
-            </Button>
-            <Button
-              onClick={handleCancel}
-              loading={isCancelling}
-              variant="secondary"
-              size="sm"
-            >
-              取消
-            </Button>
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
+      <div className={`bg-amber-50 border border-amber-200 rounded-lg shadow-lg p-4 max-w-md`}>
+        <div className="flex items-start gap-3">
+          <span className="text-xl">🙋</span>
+          <div className="flex-1">
+            <h4 className="font-medium text-amber-800">需要用户操作</h4>
+            <p className="text-sm mt-1 text-amber-700">{request.prompt}</p>
+            <div className="flex gap-2 mt-3">
+              <Button
+                onClick={handleContinue}
+                loading={isContinuing}
+                variant="primary"
+                size="sm"
+              >
+                继续执行
+              </Button>
+              <Button
+                onClick={handleCancel}
+                loading={isCancelling}
+                variant="secondary"
+                size="sm"
+              >
+                取消
+              </Button>
+            </div>
           </div>
         </div>
       </div>

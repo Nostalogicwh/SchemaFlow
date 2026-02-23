@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { credentialStore, type StorageState } from '@/services/credentialStore'
 import type {
   ExecutionState,
   NodeStatus,
@@ -13,6 +14,11 @@ interface ExecutionStoreState {
   executionState: ExecutionState
   showPanel: boolean
   executionMode: 'headless' | 'headed'
+  loginRequired: boolean
+  loginReason: string | null
+  loginUrl: string | null
+  currentWorkflowId: string | null
+  _ws: WebSocket | null
 }
 
 interface ExecutionStoreActions {
@@ -28,6 +34,10 @@ interface ExecutionStoreActions {
   setExecutionMode: (mode: 'headless' | 'headed') => void
   reset: () => void
   handleMessage: (message: WSMessage) => void
+  setLoginRequired: (required: boolean, reason?: string | null, url?: string | null) => void
+  setCurrentWorkflowId: (id: string | null) => void
+  setWebSocket: (ws: WebSocket | null) => void
+  sendWS: (message: WSMessage) => void
 }
 
 type ExecutionStore = ExecutionStoreState & ExecutionStoreActions
@@ -48,6 +58,11 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   executionState: initialExecutionState,
   showPanel: false,
   executionMode: 'headless',
+  loginRequired: false,
+  loginReason: null,
+  loginUrl: null,
+  currentWorkflowId: null,
+  _ws: null,
 
   setConnected: (connected) => set({ isConnected: connected }),
 
@@ -98,6 +113,27 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   setShowPanel: (show) => set({ showPanel: show }),
 
   setExecutionMode: (mode) => set({ executionMode: mode }),
+
+  setLoginRequired: (required, reason = null, url = null) =>
+    set({
+      loginRequired: required,
+      loginReason: reason,
+      loginUrl: url,
+    }),
+
+  setCurrentWorkflowId: (id) =>
+    set({ currentWorkflowId: id }),
+
+  setWebSocket: (ws) => set({ _ws: ws }),
+
+  sendWS: (message) => {
+    const ws = get()._ws
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(message))
+    } else {
+      console.warn('[sendWS] WebSocket 未连接，无法发送消息:', message.type)
+    }
+  },
 
   reset: () => set({ executionState: initialExecutionState }),
 
@@ -160,6 +196,17 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
         }))
         break
 
+      case 'execution_cancelled':
+        set((state) => ({
+          executionState: {
+            ...state.executionState,
+            isRunning: false,
+            currentNodeId: null,
+            userInputRequest: null,
+          },
+        }))
+        break
+
       case 'error':
         addLog({
           type: 'log',
@@ -170,6 +217,43 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
         set((state) => ({
           executionState: { ...state.executionState, isRunning: false },
         }))
+        break
+
+      case 'storage_state_update':
+        if (message.data && get().currentWorkflowId) {
+          const state = message.data as StorageState
+          console.log(`[executionStore] 收到凭证更新: cookies=${state.cookies?.length || 0}, origins=${state.origins?.length || 0}`)
+          credentialStore.save(get().currentWorkflowId!, state)
+        }
+        break
+
+      case 'require_manual_login':
+        set({
+          loginRequired: true,
+          loginReason: message.reason as string | null,
+          loginUrl: message.url as string | null
+        })
+        break
+
+      case 'login_confirmation_received':
+        set({ loginRequired: false })
+        break
+
+      case 'debug_locator_result':
+        if (typeof window !== 'undefined') {
+          const event = new CustomEvent('debugLocatorResult', {
+            detail: {
+              nodeId: message.node_id,
+              success: message.success,
+              selector: message.selector,
+              confidence: message.confidence,
+              method: message.method,
+              reasoning: message.reasoning,
+              error: message.error,
+            }
+          })
+          window.dispatchEvent(event)
+        }
         break
     }
   },

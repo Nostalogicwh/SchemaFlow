@@ -1,4 +1,5 @@
 """工作流 CRUD API。"""
+
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any
 import sys
@@ -6,8 +7,8 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from storage.file_storage import JSONFileStorage
-from repository.base import ExecutionRepository
+from persistence.file_storage import JSONFileStorage
+from persistence.base import ExecutionRepository
 from dependencies import get_storage, get_execution_repo
 
 router = APIRouter(prefix="/api", tags=["workflows"])
@@ -15,9 +16,7 @@ router = APIRouter(prefix="/api", tags=["workflows"])
 
 @router.get("/workflows")
 async def list_workflows(
-    skip: int = 0,
-    limit: int = 100,
-    storage: JSONFileStorage = Depends(get_storage)
+    skip: int = 0, limit: int = 100, storage: JSONFileStorage = Depends(get_storage)
 ) -> List[Dict[str, Any]]:
     """获取工作流列表。
 
@@ -34,8 +33,7 @@ async def list_workflows(
 
 @router.get("/workflows/{workflow_id}")
 async def get_workflow(
-    workflow_id: str,
-    storage: JSONFileStorage = Depends(get_storage)
+    workflow_id: str, storage: JSONFileStorage = Depends(get_storage)
 ) -> Dict[str, Any]:
     """获取工作流详情。
 
@@ -57,8 +55,7 @@ async def get_workflow(
 
 @router.post("/workflows")
 async def create_workflow(
-    workflow: Dict[str, Any],
-    storage: JSONFileStorage = Depends(get_storage)
+    workflow: Dict[str, Any], storage: JSONFileStorage = Depends(get_storage)
 ) -> Dict[str, Any]:
     """创建工作流。
 
@@ -77,7 +74,7 @@ async def create_workflow(
 async def update_workflow(
     workflow_id: str,
     workflow: Dict[str, Any],
-    storage: JSONFileStorage = Depends(get_storage)
+    storage: JSONFileStorage = Depends(get_storage),
 ) -> Dict[str, Any]:
     """更新工作流。
 
@@ -99,8 +96,7 @@ async def update_workflow(
 
 @router.delete("/workflows/{workflow_id}")
 async def delete_workflow(
-    workflow_id: str,
-    storage: JSONFileStorage = Depends(get_storage)
+    workflow_id: str, storage: JSONFileStorage = Depends(get_storage)
 ) -> Dict[str, Any]:
     """删除工作流。
 
@@ -122,8 +118,7 @@ async def delete_workflow(
 
 @router.get("/workflows/{workflow_id}/last-execution")
 async def get_last_execution(
-    workflow_id: str,
-    repo: ExecutionRepository = Depends(get_execution_repo)
+    workflow_id: str, repo: ExecutionRepository = Depends(get_execution_repo)
 ) -> Dict[str, Any]:
     """获取工作流最近一次执行记录。
 

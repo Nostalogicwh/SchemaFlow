@@ -98,8 +98,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             
             // 边框样式
             showError 
-              ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
-              : 'border-neutral-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20',
+              ? 'border-red-500 hover:border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
+              : 'border-neutral-200 hover:border-neutral-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20',
             
             // 前缀图标时的左内边距
             PrefixIcon && 'pl-10',

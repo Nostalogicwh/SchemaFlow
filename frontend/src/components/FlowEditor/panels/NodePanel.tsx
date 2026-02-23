@@ -2,27 +2,30 @@
  * 节点属性面板 - 编辑选中节点的配置
  * v2: 使用A2组件优化 - FormField、Input、Select、Textarea、Badge、Tag
  */
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import type { Node } from '@xyflow/react'
 import type { ActionMetadata, JsonSchemaProperty } from '@/types/workflow'
 import { EmptyState } from '@/components/common'
 import { Input } from '@/components/ui/Input'
-import { MousePointer2, Settings2 } from 'lucide-react'
+import { MousePointer2, Settings2, Bug } from 'lucide-react'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
 import { FormField } from '@/components/ui/FormField'
 import { Tag } from '@/components/ui/Tag'
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
 import { cn } from '@/utils'
+import { DebugLocatorModal } from '@/components/FlowEditor/DebugLocatorModal'
 
 interface NodePanelProps {
   selectedNode: Node | null
   actionMetadata: ActionMetadata[]
   onUpdateNode: (nodeId: string, config: Record<string, unknown>) => void
   onUpdateNodeLabel: (nodeId: string, label: string) => void
+  wsConnection?: WebSocket | null
 }
 
-export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdateNodeLabel }: NodePanelProps) {
+export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdateNodeLabel, wsConnection }: NodePanelProps) {
   // 获取当前节点的元数据
   const metadata = actionMetadata.find(a => a.name === selectedNode?.type)
 
@@ -34,6 +37,9 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdate
     config?: Record<string, unknown>
   } | undefined
 
+  // 调试弹窗状态
+  const [isDebugModalOpen, setIsDebugModalOpen] = useState(false)
+
   // 更新配置
   const handleChange = useCallback(
     (key: string, value: unknown) => {
@@ -43,6 +49,23 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdate
     },
     [selectedNode, onUpdateNode]
   )
+
+  // 检查节点是否支持AI定位
+  const supportsAiLocator = metadata?.name === 'wait_for_element' ||
+    metadata?.name === 'browser_click' ||
+    metadata?.name === 'browser_input'
+
+  // 处理保存选择器
+  const handleSaveSelector = useCallback((selector: string) => {
+    if (!selectedNode) return
+    const currentConfig = (selectedNode.data as { config?: Record<string, unknown> }).config || {}
+    onUpdateNode(selectedNode.id, { ...currentConfig, selector })
+  }, [selectedNode, onUpdateNode])
+
+  // 打开调试弹窗
+  const openDebugModal = useCallback(() => {
+    setIsDebugModalOpen(true)
+  }, [])
 
   if (!selectedNode) {
     return (
@@ -119,7 +142,76 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdate
             onChange={(value) => handleChange(key, value)}
           />
         ))}
+
+        {/* AI 定位配置区域 - 仅对支持的节点显示 */}
+        {supportsAiLocator && (
+          <div className="border-t pt-4 mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-medium text-gray-700">AI 智能定位</h4>
+              <Button
+                onClick={openDebugModal}
+                variant="secondary"
+                size="sm"
+                icon={<Bug className="w-4 h-4" />}
+              >
+                调试定位
+              </Button>
+            </div>
+
+            {/* 已保存的选择器显示 */}
+            <div className="mb-3">
+              <FormField
+                label="已保存的选择器"
+                helpText="调试成功后自动保存，下次优先使用"
+              >
+                <Input
+                  type="text"
+                  value={(currentConfig.selector as string) ?? ''}
+                  onChange={(e) => handleChange('selector', e.target.value || undefined)}
+                  placeholder="未保存选择器，请使用调试功能生成"
+                  readOnly={!currentConfig.selector}
+                />
+              </FormField>
+            </div>
+
+            {/* AI 后备开关 */}
+            <div className="flex items-center justify-between">
+              <label className="text-sm text-gray-700">
+                当 CSS 选择器失效时启用 AI 定位
+              </label>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!!(currentConfig.enable_ai_fallback ?? true)}
+                onClick={() => handleChange('enable_ai_fallback', !(currentConfig.enable_ai_fallback ?? true))}
+                className={cn(
+                  'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                  (currentConfig.enable_ai_fallback ?? true) ? 'bg-blue-500' : 'bg-gray-300'
+                )}
+              >
+                <span
+                  className={cn(
+                    'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                    (currentConfig.enable_ai_fallback ?? true) ? 'translate-x-6' : 'translate-x-1'
+                  )}
+                />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* 调试定位弹窗 */}
+      {supportsAiLocator && (
+        <DebugLocatorModal
+          isOpen={isDebugModalOpen}
+          onClose={() => setIsDebugModalOpen(false)}
+          nodeId={selectedNode?.id || ''}
+          nodeType={selectedNode?.type || ''}
+          onSave={handleSaveSelector}
+          wsConnection={wsConnection || null}
+        />
+      )}
     </div>
   )
 }
@@ -146,7 +238,8 @@ function FieldRenderer({ name, property, value, required, onChange }: FieldRende
       text: '要输入的文本内容',
       prompt: '输入给AI的提示词或指令',
       code: 'JavaScript代码片段',
-      wait_time: '等待时间（秒）',
+      wait_time: '等待元素出现的时间（秒），超过此时间未找到元素会报错',
+      timeout: '节点的最大执行时间（秒），超过此时间会强制结束',
       variable_name: '变量名称，用于存储数据',
     }
     return helpTexts[fieldName]
@@ -219,6 +312,7 @@ function FieldRenderer({ name, property, value, required, onChange }: FieldRende
 
   // 数字类型
   if (property.type === 'number' || property.type === 'integer') {
+    const displayValue = value !== undefined && value !== null && value !== '' ? String(value) : ''
     return (
       <FormField
         label={label}
@@ -227,8 +321,18 @@ function FieldRenderer({ name, property, value, required, onChange }: FieldRende
       >
         <Input
           type="number"
-          value={(value as number) ?? (defaultValue as number) ?? ''}
-          onChange={(e) => onChange(e.target.value ? Number(e.target.value) : undefined)}
+          value={displayValue}
+          onChange={(e) => {
+            const val = e.target.value
+            if (val === '') {
+              onChange(0)
+            } else {
+              const num = Number(val)
+              if (!isNaN(num)) {
+                onChange(num)
+              }
+            }
+          }}
           placeholder={getPlaceholder(name, label)}
           onKeyDown={(e) => {
             if (e.nativeEvent.isComposing && e.key === 'Enter') {

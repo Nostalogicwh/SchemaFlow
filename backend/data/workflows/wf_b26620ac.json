@@ -5,6 +5,7 @@
     {
       "id": "start_1",
       "type": "start",
+      "label": "start",
       "config": {},
       "position": {
         "x": 300,
@@ -12,71 +13,94 @@
       }
     },
     {
-      "id": "node_open_tab_1",
-      "type": "open_tab",
-      "config": {
-        "url": "https://chat.deepseek.com/"
-      },
-      "position": {
-        "x": 300,
-        "y": 220
-      }
-    },
-    {
       "id": "node_wait_for_element_1",
       "type": "wait_for_element",
+      "label": "wait_for_element",
       "config": {
         "ai_target": "聊天输入框，用于输入消息的文本区域",
-        "timeout": 30
+        "timeout": 30,
+        "wait_time": 3
       },
       "position": {
-        "x": 300,
-        "y": 340
+        "x": 225.46478873239437,
+        "y": 392.45070422535207
       }
     },
     {
       "id": "node_input_text_1",
       "type": "input_text",
+      "label": "input_text",
       "config": {
         "ai_target": "聊天输入框，用于输入消息的文本区域",
         "value": "agent",
         "press_enter": false
       },
       "position": {
-        "x": 300,
-        "y": 460
+        "x": 224.5446009389671,
+        "y": 517.0516431924883
       }
     },
     {
       "id": "node_click_1",
       "type": "click",
+      "label": "click",
       "config": {
         "ai_target": "发送消息的按钮，通常是纸飞机图标或者发送文字按钮"
       },
       "position": {
-        "x": 300,
-        "y": 580
+        "x": 242.02816901408448,
+        "y": 626.9295774647886
       }
     },
     {
       "id": "end_1",
       "type": "end",
+      "label": "end",
       "config": {},
       "position": {
-        "x": 300,
-        "y": 700
+        "x": 294.4788732394366,
+        "y": 768.093896713615
+      }
+    },
+    {
+      "id": "node_navigate_1771684907546_dkrl",
+      "type": "navigate",
+      "label": "navigate",
+      "config": {
+        "url": "https://chat.deepseek.com/"
+      },
+      "position": {
+        "x": 260.95114582483296,
+        "y": 223.5649962333304
+      }
+    },
+    {
+      "id": "node_user_input_1771766996559_5wjl",
+      "type": "user_input",
+      "label": "用户干预",
+      "config": {
+        "prompt": "请登录deepseek",
+        "timeout": 15
+      },
+      "position": {
+        "x": 175.46478873239437,
+        "y": 315.3239436619719
+      }
+    },
+    {
+      "id": "node_wait_1771860387996_b9pw",
+      "type": "wait",
+      "label": "等待",
+      "config": {
+        "seconds": 5
+      },
+      "position": {
+        "x": 354.46361022434013,
+        "y": 711.5386048501534
       }
     }
   ],
   "edges": [
-    {
-      "source": "start_1",
-      "target": "node_open_tab_1"
-    },
-    {
-      "source": "node_open_tab_1",
-      "target": "node_wait_for_element_1"
-    },
     {
       "source": "node_wait_for_element_1",
       "target": "node_input_text_1"
@@ -86,11 +110,27 @@
       "target": "node_click_1"
     },
     {
+      "source": "start_1",
+      "target": "node_navigate_1771684907546_dkrl"
+    },
+    {
+      "source": "node_navigate_1771684907546_dkrl",
+      "target": "node_user_input_1771766996559_5wjl"
+    },
+    {
+      "source": "node_user_input_1771766996559_5wjl",
+      "target": "node_wait_for_element_1"
+    },
+    {
       "source": "node_click_1",
+      "target": "node_wait_1771860387996_b9pw"
+    },
+    {
+      "source": "node_wait_1771860387996_b9pw",
       "target": "end_1"
     }
   ],
   "id": "wf_b26620ac",
   "created_at": "2026-02-21T00:01:43.044304",
-  "updated_at": "2026-02-21T22:33:03.265181"
+  "updated_at": "2026-02-24T00:12:57.451340"
 }
