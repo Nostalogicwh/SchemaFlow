@@ -86,12 +86,14 @@ export type WSMessageType =
   | 'screenshot'
   | 'user_input_required'
   | 'execution_complete'
+  | 'execution_cancelled'
   | 'error'
   | 'log'
   | 'storage_state_update'
   | 'require_manual_login'
   | 'login_confirmation_received'
   | 'ai_intervention_required'
+  | 'debug_locator_result'
 
 // WebSocket 消息基础结构
 export interface WSMessage {

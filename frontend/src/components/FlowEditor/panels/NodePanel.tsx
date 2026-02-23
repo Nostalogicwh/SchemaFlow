@@ -39,7 +39,6 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdate
 
   // 调试弹窗状态
   const [isDebugModalOpen, setIsDebugModalOpen] = useState(false)
-  const [debugTarget, setDebugTarget] = useState('')
 
   // 更新配置
   const handleChange = useCallback(
@@ -65,11 +64,8 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdate
 
   // 打开调试弹窗
   const openDebugModal = useCallback(() => {
-    const config = nodeData?.config || {}
-    const target = (config.ai_target as string) || (config.prompt as string) || ''
-    setDebugTarget(target)
     setIsDebugModalOpen(true)
-  }, [nodeData])
+  }, [])
 
   if (!selectedNode) {
     return (
@@ -316,6 +312,7 @@ function FieldRenderer({ name, property, value, required, onChange }: FieldRende
 
   // 数字类型
   if (property.type === 'number' || property.type === 'integer') {
+    const displayValue = value !== undefined && value !== null && value !== '' ? String(value) : ''
     return (
       <FormField
         label={label}
@@ -324,8 +321,18 @@ function FieldRenderer({ name, property, value, required, onChange }: FieldRende
       >
         <Input
           type="number"
-          value={(value as number) ?? (defaultValue as number) ?? ''}
-          onChange={(e) => onChange(e.target.value ? Number(e.target.value) : undefined)}
+          value={displayValue}
+          onChange={(e) => {
+            const val = e.target.value
+            if (val === '') {
+              onChange(0)
+            } else {
+              const num = Number(val)
+              if (!isNaN(num)) {
+                onChange(num)
+              }
+            }
+          }}
           placeholder={getPlaceholder(name, label)}
           onKeyDown={(e) => {
             if (e.nativeEvent.isComposing && e.key === 'Enter') {

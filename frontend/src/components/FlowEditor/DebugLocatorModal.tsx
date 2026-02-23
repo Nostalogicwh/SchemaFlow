@@ -26,7 +26,7 @@ export function DebugLocatorModal({
   isOpen,
   onClose,
   nodeId,
-  nodeType,
+  nodeType: _nodeType,
   onSave,
   wsConnection,
 }: DebugLocatorModalProps) {
@@ -73,10 +73,11 @@ export function DebugLocatorModal({
 
   // 监听 WebSocket 消息更新调试结果
   // 实际使用时，这个应该在父组件中处理并通过 props 传入
-  const updateDebugResult = (result: DebugResult) => {
+  const _updateDebugResult = (result: DebugResult) => {
     setDebugResult(result)
     setIsDebugging(false)
   }
+  void _updateDebugResult
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="调试 AI 定位" size="lg">

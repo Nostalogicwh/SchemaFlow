@@ -13,7 +13,7 @@ import { useErrorHandler } from '@/hooks/useErrorHandler'
 import { workflowApi } from '@/api'
 
 function App() {
-  const { currentWorkflow, selectedId, saveWorkflow, listVersion } = useWorkflowStore()
+  const { currentWorkflow, selectedId, saveWorkflow } = useWorkflowStore()
 
   const { showPanel, executionMode, executionState, setShowPanel } =
     useExecutionStore()
@@ -96,7 +96,6 @@ function App() {
               selectedId={selectedId}
               onSelect={handleSelectWorkflow}
               onCreate={handleCreateWorkflow}
-              refreshKey={listVersion}
             />
           )}
           {sidebarCollapsed && (

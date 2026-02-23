@@ -1,5 +1,7 @@
 """执行控制 API。"""
 
+import logging
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from websockets.exceptions import ConnectionClosed
 
@@ -15,6 +17,7 @@ from api.websocket import ConnectionManager
 from dependencies import get_executor, get_ws_manager, get_storage
 
 router = APIRouter(prefix="/api", tags=["execution"])
+logger = logging.getLogger(__name__)
 
 
 @router.websocket("/ws/execution/{execution_id}")
@@ -66,10 +69,15 @@ async def execution_websocket(
 
             elif message_type == "user_input_response":
                 action = data.get("action", "continue")
+                node_id = data.get("node_id")
+                logger.info(
+                    f"[{execution_id}] 收到用户输入响应: action={action}, node_id={node_id}"
+                )
                 if action == "cancel":
                     await executor.stop(execution_id)
                 else:
                     await executor.respond_user_input(execution_id, action)
+                    logger.info(f"[{execution_id}] 已调用 respond_user_input")
 
             elif message_type == "stop_execution":
                 await executor.stop(execution_id)
@@ -101,7 +109,7 @@ async def execution_websocket(
 
                 if exec_context and exec_context.page:
                     try:
-                        from engine.ai_target_locator import debug_locator
+                        from engine.ai import debug_locator
 
                         result = await debug_locator(
                             exec_context.page,

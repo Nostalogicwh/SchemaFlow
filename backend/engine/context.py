@@ -151,6 +151,9 @@ class ExecutionContext:
         self._user_input_event: Optional[asyncio.Event] = None
         self._user_input_response: Optional[str] = None
 
+        # 浏览器模式标记（由 browser_manager 设置）
+        self._headless: bool = True
+
         # LLM 客户端
         self.llm_client = create_llm_client()
         llm_cfg = None
@@ -203,15 +206,13 @@ class ExecutionContext:
             RuntimeError: 用户取消操作
         """
         if self.websocket:
-            # 保存之前的状态并设置为暂停
             previous_status = self.status
             self.status = ExecutionStatus.PAUSED
 
-            # 重置用户输入事件和响应
             self._user_input_response = None
             self._user_input_event = asyncio.Event()
+            logger.info(f"[{self.execution_id}] 创建新的 _user_input_event")
 
-            # 发送用户输入请求消息到前端
             await self.websocket.send_json(
                 {
                     "type": WSMessageType.USER_INPUT_REQUIRED.value,
@@ -222,15 +223,18 @@ class ExecutionContext:
             )
 
             await self.log("info", f"等待用户输入: {prompt}")
+            logger.info(
+                f"[{self.execution_id}] 已发送 USER_INPUT_REQUIRED，开始等待响应..."
+            )
 
             try:
-                # 等待用户响应或超时
                 await asyncio.wait_for(self._user_input_event.wait(), timeout=timeout)
+                logger.info(
+                    f"[{self.execution_id}] _user_input_event 已触发，response={self._user_input_response}"
+                )
 
-                # 恢复之前的状态
                 self.status = previous_status
 
-                # 处理用户响应
                 if self._user_input_response == "cancel":
                     await self.log("info", "用户取消了操作")
                     raise RuntimeError("用户取消了操作")
@@ -239,7 +243,6 @@ class ExecutionContext:
                 return self._user_input_response
 
             except asyncio.TimeoutError:
-                # 超时处理
                 self.status = previous_status
                 await self.log("warning", "用户输入超时")
                 raise TimeoutError("用户输入超时")
@@ -254,12 +257,16 @@ class ExecutionContext:
         Args:
             response: 用户响应内容（'continue' 或 'cancel'）
         """
-        # 保存用户响应
+        logger.info(
+            f"[{self.execution_id}] respond_user_input 被调用: response={response}"
+        )
         self._user_input_response = response
 
-        # 触发等待事件
         if self._user_input_event is not None:
             self._user_input_event.set()
+            logger.info(f"[{self.execution_id}] 已触发 _user_input_event")
+        else:
+            logger.warning(f"[{self.execution_id}] _user_input_event 为 None，无法触发")
 
     async def log(self, level: str, message: str):
         """记录日志并通过 WebSocket 推送。

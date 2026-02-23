@@ -1,0 +1,32 @@
+# SchemaFlow 主配置文件
+# 本地覆盖请创建 config.local.yaml（已在 .gitignore 中忽略）
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+
+browser:
+  cdp_url: "http://localhost:9222"
+
+ai:
+  default_model: "qwen3.5-plus"
+  
+  models:
+    qwen3.5-plus:
+      provider: qwen
+      model_id: qwen3.5-plus
+      base_url: https://coding.dashscope.aliyuncs.com/v1
+      max_tokens: 32000
+      temperature: 0.1
+      timeout: 600
+
+  scenarios:
+    default: qwen3.5-plus
+    intervention_detection: qwen3.5-plus
+    element_location: qwen3.5-plus
+    workflow_generation: qwen3.5-plus
+    error_analysis: qwen3.5-plus
+
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

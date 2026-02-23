@@ -23,11 +23,9 @@ from config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# AI检测使用的轻量级模型
 AI_INTERVENTION_MODEL = "gpt-4o-mini"
 
 
-# 检测Prompt模板
 INTERVENTION_DETECTION_PROMPT = """分析以下网页截图，判断是否需要人工干预。
 
 请检查是否存在以下情况：
@@ -39,10 +37,10 @@ INTERVENTION_DETECTION_PROMPT = """分析以下网页截图，判断是否需要
 
 请按以下JSON格式返回结果：
 {
-    "needs_intervention": true/false,  // 是否需要人工干预
-    "intervention_type": "类型描述",  // 如果needs_intervention为true，描述具体类型
-    "confidence": 0.0-1.0,             // 检测置信度
-    "reason": "判断原因"               // 简要说明判断依据
+    "needs_intervention": true/false,
+    "intervention_type": "类型描述",
+    "confidence": 0.0-1.0,
+    "reason": "判断原因"
 }
 
 只返回JSON，不要包含其他文字。"""
@@ -51,12 +49,12 @@ INTERVENTION_DETECTION_PROMPT = """分析以下网页截图，判断是否需要
 class InterventionType:
     """干预类型常量定义"""
 
-    LOGIN = "登录表单"  # 登录框/登录表单
-    CAPTCHA = "验证码"  # 验证码(CAPTCHA)
-    POPUP = "弹窗"  # 广告/隐私政策弹窗
-    SECURITY = "安全确认"  # 安全弹窗
-    UNKNOWN = "未知"  # 未知但需要干预
-    NONE = None  # 无需干预
+    LOGIN = "登录表单"
+    CAPTCHA = "验证码"
+    POPUP = "弹窗"
+    SECURITY = "安全确认"
+    UNKNOWN = "未知"
+    NONE = None
 
 
 class AIInterventionDetector:
@@ -96,7 +94,6 @@ class AIInterventionDetector:
             result = await self._call_llm_for_detection(screenshot_base64)
             return result
         except Exception as e:
-            # 检测失败时，默认需要干预（安全优先）
             logger.warning(f"AI干预检测失败: {e}，默认需要干预")
             return {
                 "needs_intervention": True,
@@ -121,7 +118,6 @@ class AIInterventionDetector:
         if not api_key:
             raise ValueError("未配置LLM API Key")
 
-        # 构建消息
         messages = [
             {"role": "system", "content": INTERVENTION_DETECTION_PROMPT},
             {
@@ -141,7 +137,6 @@ class AIInterventionDetector:
             },
         ]
 
-        # 设置超时
         timeout = httpx.Timeout(30.0, connect=5.0)
 
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -163,7 +158,6 @@ class AIInterventionDetector:
             data = response.json()
             content = data["choices"][0]["message"]["content"]
 
-            # 解析JSON响应
             result = self._parse_detection_result(content)
             logger.info(
                 f"AI干预检测结果: needs_intervention={result['needs_intervention']}, "
@@ -181,7 +175,6 @@ class AIInterventionDetector:
         Returns:
             解析后的字典
         """
-        # 清理可能的markdown代码块
         text = content.strip()
         if text.startswith("```"):
             lines = text.split("\n")
@@ -190,11 +183,9 @@ class AIInterventionDetector:
         try:
             result = json.loads(text)
 
-            # 验证必要字段
             if "needs_intervention" not in result:
                 raise ValueError("缺少needs_intervention字段")
 
-            # 标准化结果
             return {
                 "needs_intervention": bool(result.get("needs_intervention", True)),
                 "intervention_type": result.get(
@@ -205,7 +196,6 @@ class AIInterventionDetector:
             }
         except json.JSONDecodeError as e:
             logger.error(f"解析AI检测结果失败: {e}")
-            # 如果包含明显的否定词，认为不需要干预
             negative_keywords = ["不需要", "无需", "no intervention", "not needed"]
             if any(kw in text.lower() for kw in negative_keywords):
                 return {
@@ -214,7 +204,6 @@ class AIInterventionDetector:
                     "confidence": 0.6,
                     "reason": "通过关键词判断无需干预",
                 }
-            # 否则默认需要干预
             return {
                 "needs_intervention": True,
                 "intervention_type": InterventionType.UNKNOWN,
@@ -223,7 +212,6 @@ class AIInterventionDetector:
             }
 
 
-# 全局检测器实例
 _detector_instance: Optional[AIInterventionDetector] = None
 
 

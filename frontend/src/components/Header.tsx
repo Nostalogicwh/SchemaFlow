@@ -58,7 +58,7 @@ function EditableWorkflowName({ workflow }: { workflow: Workflow }) {
     if (trimmedName !== workflow.name) {
       try {
         await saveWorkflow({ ...workflow, name: trimmedName })
-        useWorkflowStore.getState().refreshList()
+        useWorkflowStore.getState().updateWorkflowInList(workflow.id, { name: trimmedName })
         toast.success('名称已更新')
       } catch (error) {
         console.error('更新名称失败:', error)

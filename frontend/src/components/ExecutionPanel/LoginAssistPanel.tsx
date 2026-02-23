@@ -1,14 +1,12 @@
 import { Button } from '@/components/ui/Button'
 import { useExecutionStore } from '@/stores/executionStore'
-import { useExecution } from '@/hooks/useExecution'
 
 interface LoginAssistPanelProps {
   screenshot?: string | null
 }
 
 export function LoginAssistPanel({ screenshot }: LoginAssistPanelProps) {
-  const { loginRequired, loginReason, loginUrl, executionState } = useExecutionStore()
-  const { confirmLogin, stopExecution } = useExecution()
+  const { loginRequired, loginReason, loginUrl, executionState, sendWS } = useExecutionStore()
 
   if (!loginRequired) {
     return null
@@ -27,7 +25,22 @@ export function LoginAssistPanel({ screenshot }: LoginAssistPanelProps) {
 
   const handleConfirmLogin = () => {
     if (executionState.executionId) {
-      confirmLogin(executionState.executionId)
+      sendWS({
+        type: 'login_confirmed',
+        execution_id: executionState.executionId
+      })
+    }
+  }
+
+  const handleStopExecution = async () => {
+    sendWS({ type: 'stop_execution' })
+    const execId = executionState.executionId
+    if (execId) {
+      try {
+        await fetch(`/api/executions/${execId}/stop`, { method: 'POST' })
+      } catch (e) {
+        console.error('REST stop 失败:', e)
+      }
     }
   }
 
@@ -69,7 +82,7 @@ export function LoginAssistPanel({ screenshot }: LoginAssistPanelProps) {
         </div>
 
         <div className="p-4 border-t border-gray-200 flex justify-end gap-3">
-          <Button variant="secondary" onClick={stopExecution}>
+          <Button variant="secondary" onClick={handleStopExecution}>
             取消执行
           </Button>
           <Button variant="secondary">

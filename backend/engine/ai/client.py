@@ -8,7 +8,7 @@ import logging
 from typing import Dict, Any, Optional, AsyncGenerator
 from openai import AsyncOpenAI, APIError, RateLimitError, APITimeoutError
 
-from .config.ai_models import (
+from config.ai_models import (
     AIModelConfigManager,
     ScenarioType,
     get_ai_config_manager,
@@ -51,7 +51,6 @@ class AIClient:
         if client_key not in self._clients:
             client_config = self.config_manager.get_client_config(scenario)
 
-            # 创建OpenAI客户端（兼容DeepSeek、OpenAI等）
             self._clients[client_key] = AsyncOpenAI(
                 api_key=config.api_key,
                 base_url=config.base_url,
@@ -91,7 +90,6 @@ class AIClient:
         client = self._get_client(scenario)
         config = self.config_manager.get_model_for_scenario(scenario)
 
-        # 构建请求参数
         request_params = {
             "model": config.model,
             "messages": messages,
@@ -102,7 +100,6 @@ class AIClient:
         if max_tokens or config.max_tokens:
             request_params["max_tokens"] = max_tokens or config.max_tokens
 
-        # 添加额外参数
         request_params.update(config.extra_params)
         request_params.update(extra_params)
 
@@ -154,7 +151,6 @@ class AIClient:
                     delta = chunk.choices[0].delta
                     if delta.content:
                         full_content += delta.content
-                    # 支持DeepSeek的reasoning_content
                     if hasattr(delta, "reasoning_content") and delta.reasoning_content:
                         full_reasoning += delta.reasoning_content
 
@@ -197,7 +193,6 @@ class AIClient:
             },
         }
 
-        # 支持DeepSeek的reasoning_content
         if hasattr(message, "reasoning_content") and message.reasoning_content:
             result["reasoning_content"] = message.reasoning_content
 
@@ -417,7 +412,6 @@ SchemaFlow工作流包含以下节点类型：
         }
 
 
-# 全局客户端实例
 _ai_client = None
 
 

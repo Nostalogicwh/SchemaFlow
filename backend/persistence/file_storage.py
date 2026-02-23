@@ -1,4 +1,5 @@
 """基于本地 JSON 文件的存储实现。"""
+
 import aiofiles
 import json
 import os
@@ -24,18 +25,16 @@ class JSONFileStorage(StorageBase):
         self.workflows_dir = self.base_dir / "workflows"
         self.logs_dir = self.base_dir / "logs"
 
-        # 确保目录存在
         self.workflows_dir.mkdir(parents=True, exist_ok=True)
         self.logs_dir.mkdir(parents=True, exist_ok=True)
 
-        # 索引文件
         self.index_file = self.workflows_dir / "index.json"
         self._ensure_index()
 
     def _ensure_index(self):
         """确保索引文件存在（同步初始化）。"""
         if not self.index_file.exists():
-            with open(self.index_file, 'w', encoding='utf-8') as f:
+            with open(self.index_file, "w", encoding="utf-8") as f:
                 json.dump({}, f, indent=2, ensure_ascii=False)
 
     async def _read_index(self) -> Dict[str, Dict]:
@@ -43,7 +42,7 @@ class JSONFileStorage(StorageBase):
         if not self.index_file.exists():
             return {}
         try:
-            async with aiofiles.open(self.index_file, 'r', encoding='utf-8') as f:
+            async with aiofiles.open(self.index_file, "r", encoding="utf-8") as f:
                 content = await f.read()
                 return json.loads(content)
         except json.JSONDecodeError:
@@ -51,9 +50,11 @@ class JSONFileStorage(StorageBase):
 
     async def _write_index(self, index: Dict[str, Dict]):
         """原子写入索引文件。"""
-        tmp_fd, tmp_path = tempfile.mkstemp(dir=str(self.index_file.parent), suffix='.tmp')
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            dir=str(self.index_file.parent), suffix=".tmp"
+        )
         try:
-            async with aiofiles.open(tmp_path, 'w', encoding='utf-8') as f:
+            async with aiofiles.open(tmp_path, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(index, indent=2, ensure_ascii=False))
             os.replace(tmp_path, str(self.index_file))
         except (OSError, IOError) as e:
@@ -79,31 +80,27 @@ class JSONFileStorage(StorageBase):
         Returns:
             workflow_id: 工作流 ID
         """
-        # 确保有 ID
         if "id" not in workflow:
             workflow["id"] = f"wf_{uuid.uuid4().hex[:8]}"
 
         workflow_id = workflow["id"]
 
-        # 添加时间戳
         now = datetime.now().isoformat()
         if "created_at" not in workflow:
             workflow["created_at"] = now
         workflow["updated_at"] = now
 
-        # 写入文件
         workflow_path = self._workflow_path(workflow_id)
-        async with aiofiles.open(workflow_path, 'w', encoding='utf-8') as f:
+        async with aiofiles.open(workflow_path, "w", encoding="utf-8") as f:
             await f.write(json.dumps(workflow, indent=2, ensure_ascii=False))
 
-        # 更新索引
         index = await self._read_index()
         index[workflow_id] = {
             "id": workflow_id,
             "name": workflow.get("name", ""),
             "description": workflow.get("description", ""),
             "created_at": workflow.get("created_at"),
-            "updated_at": now
+            "updated_at": now,
         }
         await self._write_index(index)
 
@@ -122,11 +119,13 @@ class JSONFileStorage(StorageBase):
         if not workflow_path.exists():
             return None
 
-        async with aiofiles.open(workflow_path, 'r', encoding='utf-8') as f:
+        async with aiofiles.open(workflow_path, "r", encoding="utf-8") as f:
             content = await f.read()
             return json.loads(content)
 
-    async def list_workflows(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+    async def list_workflows(
+        self, skip: int = 0, limit: int = 100
+    ) -> List[Dict[str, Any]]:
         """列出工作流。
 
         Args:
@@ -139,11 +138,9 @@ class JSONFileStorage(StorageBase):
         index = await self._read_index()
         workflows = list(index.values())
 
-        # 按更新时间倒序
         workflows.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
 
-        # 分页
-        return workflows[skip:skip + limit]
+        return workflows[skip : skip + limit]
 
     async def delete_workflow(self, workflow_id: str) -> bool:
         """删除工作流。
@@ -158,7 +155,6 @@ class JSONFileStorage(StorageBase):
         if workflow_path.exists():
             workflow_path.unlink()
 
-        # 更新索引
         index = await self._read_index()
         if workflow_id in index:
             del index[workflow_id]
@@ -179,7 +175,7 @@ class JSONFileStorage(StorageBase):
         log["execution_id"] = execution_id
 
         log_path = self._log_path(execution_id)
-        async with aiofiles.open(log_path, 'w', encoding='utf-8') as f:
+        async with aiofiles.open(log_path, "w", encoding="utf-8") as f:
             await f.write(json.dumps(log, indent=2, ensure_ascii=False))
 
         return execution_id
@@ -197,15 +193,12 @@ class JSONFileStorage(StorageBase):
         if not log_path.exists():
             return None
 
-        async with aiofiles.open(log_path, 'r', encoding='utf-8') as f:
+        async with aiofiles.open(log_path, "r", encoding="utf-8") as f:
             content = await f.read()
             return json.loads(content)
 
     async def list_execution_logs(
-        self,
-        workflow_id: str,
-        skip: int = 0,
-        limit: int = 100
+        self, workflow_id: str, skip: int = 0, limit: int = 100
     ) -> List[Dict[str, Any]]:
         """列出工作流的执行日志。
 
@@ -219,15 +212,13 @@ class JSONFileStorage(StorageBase):
         """
         logs = []
 
-        # 遍历日志目录
         for log_file in self.logs_dir.glob("*.json"):
-            async with aiofiles.open(log_file, 'r', encoding='utf-8') as f:
+            async with aiofiles.open(log_file, "r", encoding="utf-8") as f:
                 content = await f.read()
                 log = json.loads(content)
                 if log.get("workflow_id") == workflow_id:
                     logs.append(log)
 
-        # 按时间倒序
         logs.sort(key=lambda x: x.get("start_time", ""), reverse=True)
 
-        return logs[skip:skip + limit]
+        return logs[skip : skip + limit]

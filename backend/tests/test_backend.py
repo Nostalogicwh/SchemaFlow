@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """后端测试脚本 - 验证工作流执行流程。"""
+
 import asyncio
 import json
 import httpx
@@ -32,17 +33,21 @@ async def test_api():
             "description": "简单的导航测试",
             "nodes": [
                 {"id": "start_1", "type": "start", "config": {}},
-                {"id": "open_1", "type": "open_tab", "config": {"url": "https://www.baidu.com"}},
+                {
+                    "id": "open_1",
+                    "type": "open_tab",
+                    "config": {"url": "https://www.baidu.com"},
+                },
                 {"id": "wait_1", "type": "wait", "config": {"seconds": 2}},
                 {"id": "screenshot_1", "type": "screenshot", "config": {}},
-                {"id": "end_1", "type": "end", "config": {}}
+                {"id": "end_1", "type": "end", "config": {}},
             ],
             "edges": [
                 {"source": "start_1", "target": "open_1"},
                 {"source": "open_1", "target": "wait_1"},
                 {"source": "wait_1", "target": "screenshot_1"},
-                {"source": "screenshot_1", "target": "end_1"}
-            ]
+                {"source": "screenshot_1", "target": "end_1"},
+            ],
         }
         resp = await client.post(f"{BASE_URL}/api/workflows", json=test_workflow)
         workflow = resp.json()
@@ -84,10 +89,9 @@ async def test_websocket(workflow_id: str, execution_id: str):
 
             # 发送开始执行命令
             print("\n发送 start_execution 命令...")
-            await ws.send(json.dumps({
-                "type": "start_execution",
-                "workflow_id": workflow_id
-            }))
+            await ws.send(
+                json.dumps({"type": "start_execution", "workflow_id": workflow_id})
+            )
 
             # 接收执行消息
             print("\n等待执行消息...")
@@ -100,7 +104,9 @@ async def test_websocket(workflow_id: str, execution_id: str):
                     if msg_type == "execution_started":
                         print(f"✓ 执行开始，节点顺序: {data.get('node_order')}")
                     elif msg_type == "node_start":
-                        print(f"→ 节点开始: {data.get('node_id')} ({data.get('node_type')})")
+                        print(
+                            f"→ 节点开始: {data.get('node_id')} ({data.get('node_type')})"
+                        )
                     elif msg_type == "node_complete":
                         print(f"✓ 节点完成: {data.get('node_id')}")
                     elif msg_type == "screenshot":
@@ -164,6 +170,7 @@ async def main():
     except Exception as e:
         print(f"\n✗ 测试失败: {e}")
         import traceback
+
         traceback.print_exc()
 
 

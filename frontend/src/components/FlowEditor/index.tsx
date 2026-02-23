@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { toast } from '@/stores/uiStore'
 import {
   ReactFlow,
   Background,
@@ -21,8 +20,8 @@ import { nodeTypes, nodeCategoryMap } from './nodes'
 import { NodePanel } from './panels/NodePanel'
 import { Toolbar } from './panels/Toolbar'
 import { useExecutionStore } from '@/stores/executionStore'
+import { useActionStore } from '@/stores/actionStore'
 import type { ActionMetadata, Workflow, WorkflowNode, WorkflowEdge, NodeStatus } from '@/types/workflow'
-import { actionApi } from '@/api'
 
 type FlowNodeData = {
   label: string
@@ -101,11 +100,11 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
   const [nodes, setNodes, onNodesState] = useNodesState<FlowNode>([])
   const [edges, setEdges, onEdgesState] = useEdgesState<Edge>([])
   const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null)
-  const [actions, setActions] = useState<ActionMetadata[]>([])
   const [showPanel] = useState(true)
   const [showMiniMap] = useState(true)
   const { screenToFlowPosition } = useReactFlow()
 
+  const { actions, loadActions } = useActionStore()
   const storeNodeStatuses = useExecutionStore((state) => state.executionState.nodeStatuses)
   const nodeStatuses = externalNodeStatuses || storeNodeStatuses
 
@@ -113,7 +112,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
   const onEdgesChange = onEdgesState
 
   useEffect(() => {
-    actionApi.list().then(setActions).catch(console.error)
+    loadActions()
   }, [])
 
   useEffect(() => {
@@ -260,7 +259,6 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
     if (!workflow || !onSave) return
     const updatedWorkflow = flowToWorkflow(nodes, edges, workflow)
     onSave(updatedWorkflow)
-    toast.success('工作流已保存')
   }, [workflow, nodes, edges, onSave])
 
   return (

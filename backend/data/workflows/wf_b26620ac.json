@@ -18,7 +18,8 @@
       "label": "wait_for_element",
       "config": {
         "ai_target": "聊天输入框，用于输入消息的文本区域",
-        "timeout": 30
+        "timeout": 30,
+        "wait_time": 3
       },
       "position": {
         "x": 225.46478873239437,
@@ -78,11 +79,24 @@
       "type": "user_input",
       "label": "用户干预",
       "config": {
-        "prompt": "请登录deepseek"
+        "prompt": "请登录deepseek",
+        "timeout": 15
       },
       "position": {
         "x": 175.46478873239437,
         "y": 315.3239436619719
+      }
+    },
+    {
+      "id": "node_wait_1771860387996_b9pw",
+      "type": "wait",
+      "label": "等待",
+      "config": {
+        "seconds": 5
+      },
+      "position": {
+        "x": 354.46361022434013,
+        "y": 711.5386048501534
       }
     }
   ],
@@ -96,10 +110,6 @@
       "target": "node_click_1"
     },
     {
-      "source": "node_click_1",
-      "target": "end_1"
-    },
-    {
       "source": "start_1",
       "target": "node_navigate_1771684907546_dkrl"
     },
@@ -110,9 +120,17 @@
     {
       "source": "node_user_input_1771766996559_5wjl",
       "target": "node_wait_for_element_1"
+    },
+    {
+      "source": "node_click_1",
+      "target": "node_wait_1771860387996_b9pw"
+    },
+    {
+      "source": "node_wait_1771860387996_b9pw",
+      "target": "end_1"
     }
   ],
   "id": "wf_b26620ac",
   "created_at": "2026-02-21T00:01:43.044304",
-  "updated_at": "2026-02-22T21:30:23.324104"
+  "updated_at": "2026-02-24T00:12:57.451340"
 }

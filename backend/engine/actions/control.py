@@ -33,6 +33,9 @@ async def wait_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     import asyncio
 
     seconds = config.get("seconds", 1)
+    if seconds <= 0:
+        await context.log("info", "等待时间为 0，跳过等待")
+        return {}
     await context.log("info", f"等待 {seconds} 秒")
     await asyncio.sleep(seconds)
     return {}
@@ -126,11 +129,6 @@ async def wait_for_element_action(
                 "description": "超时时间（秒）",
                 "default": 300,
             },
-            "use_browser_dialog": {
-                "type": "boolean",
-                "description": "前台模式下是否使用浏览器弹窗（而非前端弹窗）",
-                "default": True,
-            },
         },
         "required": ["prompt"],
     },
@@ -140,10 +138,9 @@ async def wait_for_element_action(
 async def user_input_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """用户干预节点。
 
-    暂停执行并等待用户输入。支持三种模式：
-    1. 后台模式（headless=True）：通过WebSocket发送消息到前端显示弹窗
-    2. 前台模式（headless=False）：在Playwright浏览器中显示confirm弹窗
-    3. 无WebSocket模式：直接等待
+    暂停执行并等待用户输入。
+    - 前台模式：在 Playwright 浏览器顶部显示非阻塞通知栏，页面跳转时自动继续
+    - 后台模式：通过 WebSocket 通知前端应用显示弹窗
 
     Args:
         context: 执行上下文
@@ -153,132 +150,136 @@ async def user_input_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
         执行结果
 
     Raises:
-        TimeoutError: 用户输入超时
-        RuntimeError: 用户取消操作
+        RuntimeError: 用户取消操作（仅限明确点击取消）
     """
+    import asyncio
+    import logging
+
+    logger = logging.getLogger(__name__)
+
     prompt = config.get("prompt", "请完成操作后继续")
     timeout = config.get("timeout", 300)
-    use_browser_dialog = config.get("use_browser_dialog", True)
 
-    await context.log("info", f"等待用户输入: {prompt}")
+    is_headed = not getattr(context, "_headless", True)
+    await context.log("info", f"等待用户输入: {prompt} (前台模式: {is_headed})")
 
-    # 判断是否是前台模式
-    is_headed_mode = not getattr(context, "_is_cdp", False) and context.page is not None
-
-    # 前台模式：在Playwright浏览器中显示弹窗
-    if is_headed_mode and use_browser_dialog and context.page:
-        await context.log("info", "前台模式：在浏览器中显示弹窗")
+    if is_headed and context.page:
+        await context.log("info", "前台模式：在浏览器中显示顶部通知栏")
         try:
-            # 在浏览器中显示自定义弹窗
             result = await context.page.evaluate(
-                """(prompt) => {
+                """({ prompt, timeout }) => {
                     return new Promise((resolve) => {
-                        // 创建自定义弹窗样式
-                        const dialog = document.createElement('div');
-                        dialog.id = 'schemaflow-user-input-dialog';
-                        dialog.style.cssText = `
-                            position: fixed;
-                            top: 50%;
-                            left: 50%;
-                            transform: translate(-50%, -50%);
-                            background: white;
-                            padding: 20px;
-                            border-radius: 8px;
-                            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-                            z-index: 10000;
-                            font-family: system-ui, -apple-system, sans-serif;
-                            max-width: 400px;
-                            text-align: center;
-                        `;
-
-                        // 添加遮罩层
-                        const overlay = document.createElement('div');
-                        overlay.style.cssText = `
+                        const oldBanner = document.getElementById('schemaflow-banner');
+                        if (oldBanner) oldBanner.remove();
+                        
+                        const banner = document.createElement('div');
+                        banner.id = 'schemaflow-banner';
+                        banner.style.cssText = `
                             position: fixed;
                             top: 0;
                             left: 0;
-                            width: 100%;
-                            height: 100%;
-                            background: rgba(0,0,0,0.5);
-                            z-index: 9999;
+                            right: 0;
+                            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+                            color: white;
+                            padding: 12px 20px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
+                            font-family: system-ui, -apple-system, sans-serif;
+                            font-size: 14px;
+                            z-index: 2147483647;
+                            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
                         `;
-
-                        // 弹窗内容
-                        dialog.innerHTML = `
-                            <div style="margin-bottom: 15px;">
-                                <strong style="font-size: 16px; color: #333;">SchemaFlow - 需要用户操作</strong>
-                            </div>
-                            <div style="margin-bottom: 20px; color: #666; line-height: 1.5;">${prompt}</div>
-                            <div style="display: flex; gap: 10px; justify-content: center;">
-                                <button id="schemaflow-continue" style="
-                                    padding: 8px 20px;
-                                    background: #2563eb;
-                                    color: white;
-                                    border: none;
-                                    border-radius: 4px;
-                                    cursor: pointer;
-                                    font-size: 14px;
-                                ">继续执行</button>
-                                <button id="schemaflow-cancel" style="
-                                    padding: 8px 20px;
-                                    background: #e5e7eb;
-                                    color: #374151;
-                                    border: none;
-                                    border-radius: 4px;
-                                    cursor: pointer;
-                                    font-size: 14px;
-                                ">取消</button>
-                            </div>
+                        
+                        const content = document.createElement('div');
+                        content.style.cssText = 'flex: 1; display: flex; align-items: center; gap: 10px;';
+                        content.innerHTML = '<span style="font-size: 18px;">🙋</span><span>' + prompt + '</span>';
+                        
+                        const buttons = document.createElement('div');
+                        buttons.style.cssText = 'display: flex; gap: 8px;';
+                        
+                        const continueBtn = document.createElement('button');
+                        continueBtn.textContent = '继续执行';
+                        continueBtn.style.cssText = `
+                            padding: 8px 16px;
+                            background: white;
+                            color: #2563eb;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-weight: 500;
+                            font-size: 14px;
                         `;
-
-                        document.body.appendChild(overlay);
-                        document.body.appendChild(dialog);
-
-                        // 绑定按钮事件
-                        document.getElementById('schemaflow-continue').onclick = () => {
-                            document.body.removeChild(dialog);
-                            document.body.removeChild(overlay);
+                        continueBtn.onclick = () => {
+                            banner.remove();
                             resolve('continue');
                         };
-
-                        document.getElementById('schemaflow-cancel').onclick = () => {
-                            document.body.removeChild(dialog);
-                            document.body.removeChild(overlay);
+                        
+                        const cancelBtn = document.createElement('button');
+                        cancelBtn.textContent = '取消执行';
+                        cancelBtn.style.cssText = `
+                            padding: 8px 16px;
+                            background: rgba(255,255,255,0.2);
+                            color: white;
+                            border: 1px solid rgba(255,255,255,0.3);
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-size: 14px;
+                        `;
+                        cancelBtn.onclick = () => {
+                            banner.remove();
                             resolve('cancel');
                         };
+                        
+                        buttons.appendChild(continueBtn);
+                        buttons.appendChild(cancelBtn);
+                        banner.appendChild(content);
+                        banner.appendChild(buttons);
+                        document.body.appendChild(banner);
+                        
+                        setTimeout(() => {
+                            if (document.getElementById('schemaflow-banner')) {
+                                banner.remove();
+                                resolve('timeout');
+                            }
+                        }, timeout * 1000);
                     });
                 }""",
-                prompt,
+                {"prompt": prompt, "timeout": timeout},
             )
 
             if result == "cancel":
-                await context.log("info", "用户在浏览器中取消了操作")
+                await context.log("info", "用户取消了操作")
                 raise RuntimeError("用户取消了操作")
+            elif result == "timeout":
+                await context.log("info", "等待超时，自动继续执行")
+            else:
+                await context.log("info", "用户点击了继续")
 
-            await context.log("info", "用户在浏览器中点击了继续")
+            return {}
 
+        except RuntimeError:
+            raise
         except Exception as e:
-            if "用户取消" in str(e):
-                raise
-            # 如果浏览器弹窗失败，回退到前端弹窗
-            await context.log("warning", f"浏览器弹窗失败，回退到前端弹窗: {e}")
+            await context.log("info", f"页面可能已跳转（{e}），自动继续执行下一节点")
+            return {}
 
-    # 后台模式或无浏览器模式：通过WebSocket发送消息到前端
     if context.websocket:
         try:
+            logger.info(f"[{context.execution_id}] 后台模式：等待 WebSocket 响应")
             response = await context.request_user_input(prompt, timeout)
+            logger.info(f"[{context.execution_id}] 收到 WebSocket 响应: {response}")
             await context.log("info", f"用户响应: {response}")
+            if response == "cancel":
+                raise RuntimeError("用户取消了操作")
         except TimeoutError:
-            await context.log("warning", "用户输入超时，继续执行")
-            # 超时后继续执行，不中断流程
-        except RuntimeError as e:
-            await context.log("info", f"用户取消: {e}")
-            # 用户取消，抛出异常让执行器处理
+            await context.log("info", "用户输入超时，自动继续执行")
+        except RuntimeError:
             raise
+        except Exception as e:
+            logger.error(f"[{context.execution_id}] 后台模式异常: {e}", exc_info=True)
+            await context.log("warning", f"等待异常: {e}，自动继续执行")
     else:
-        # 无 WebSocket 模式，直接等待
-        import asyncio
-
         await context.log("info", "无 WebSocket 连接，等待 5 秒后继续")
         await asyncio.sleep(5)
 

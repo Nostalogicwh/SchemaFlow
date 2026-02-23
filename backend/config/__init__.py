@@ -1,25 +1,46 @@
-"""后端配置模块 - AI模型配置管理。
+"""后端配置模块 - 统一配置管理。
 
-此模块提供AI模型配置管理功能。
-主配置（get_settings）请从 backend.config（backend/config.py）导入。
+此模块提供配置加载和管理功能。
+
+使用方式：
+    # 基础配置
+    from config import get_config, get_settings
+    config = get_config()
+    port = config["server"]["port"]
+
+    # AI 配置
+    from config import get_ai_config, get_model_for_scenario
+    model = get_model_for_scenario("intervention_detection")
+
+    # 向后兼容：get_settings() 等同于 get_config()
 """
 
-from .ai_models import (
-    AIModelConfigManager,
-    ScenarioType,
-    ModelConfig,
-    ScenarioConfig,
-    get_ai_config_manager,
+from .loader import (
+    load_config,
+    get_config,
+    get_ai_config,
+    get_model_config,
     get_model_for_scenario,
-    get_client_config,
+    get_server_config,
+    get_browser_config,
+    get_logging_config,
+    reload_config,
+    setup_logging,
 )
 
+# 向后兼容：旧版 config.py 的接口
+get_settings = get_config
+
 __all__ = [
-    "AIModelConfigManager",
-    "ScenarioType",
-    "ModelConfig",
-    "ScenarioConfig",
-    "get_ai_config_manager",
+    "load_config",
+    "get_config",
+    "get_settings",
+    "get_ai_config",
+    "get_model_config",
     "get_model_for_scenario",
-    "get_client_config",
+    "get_server_config",
+    "get_browser_config",
+    "get_logging_config",
+    "reload_config",
+    "setup_logging",
 ]

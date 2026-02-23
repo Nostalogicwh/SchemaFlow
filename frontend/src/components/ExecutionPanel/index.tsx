@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
 import { useExecutionStore } from '@/stores/executionStore'
-import { useExecution } from '@/hooks/useExecution'
 import type { WSLog, WSUserInputRequired } from '@/types/workflow'
 import { EmptyState } from '@/components/common'
 import { Button } from '@/components/ui/Button'
@@ -8,20 +7,16 @@ import { NodeRecordList } from './NodeRecordList'
 import { AIInterventionPrompt } from './AIInterventionPrompt'
 import { twSemanticColors, twColors, twTransitions } from '@/constants/designTokens'
 import { FileText } from 'lucide-react'
-import { Resizable } from 're-resizable'
 
 export function ExecutionPanel() {
-  const { executionState, isConnected } = useExecutionStore()
-  const { stopExecution, respondUserInput } = useExecution()
+  const { executionState, isConnected, sendWS } = useExecutionStore()
 
   const { isRunning, userInputRequest } = executionState
   const [isStopping, setIsStopping] = useState(false)
 
-  // 判断是否是AI干预请求（通过检测prompt内容）
   const isAIIntervention = userInputRequest?.prompt?.includes('需要人工干预') || false
   const [showAIIntervention, setShowAIIntervention] = useState(false)
 
-  // 当检测到AI干预请求时，显示AI干预弹窗
   useEffect(() => {
     setShowAIIntervention(isAIIntervention)
   }, [isAIIntervention])
@@ -29,10 +24,28 @@ export function ExecutionPanel() {
   const handleStopExecution = async () => {
     setIsStopping(true)
     try {
-      await stopExecution()
+      sendWS({ type: 'stop_execution' })
+      const execId = executionState.executionId
+      if (execId) {
+        try {
+          await fetch(`/api/executions/${execId}/stop`, { method: 'POST' })
+        } catch (e) {
+          console.error('REST stop 失败:', e)
+        }
+      }
     } finally {
       setIsStopping(false)
     }
+  }
+
+  const respondUserInput = (nodeId: string, action: 'continue' | 'cancel') => {
+    console.log(`[respondUserInput] 发送响应: node_id=${nodeId}, action=${action}`)
+    sendWS({
+      type: 'user_input_response',
+      node_id: nodeId,
+      action,
+    })
+    useExecutionStore.getState().setUserInputRequest(null)
   }
 
   return (
@@ -62,26 +75,29 @@ export function ExecutionPanel() {
         </div>
       </div>
 
-      {userInputRequest && (
+      {/* AI干预提示弹窗 - 仅 AI 干预时显示 */}
+      {userInputRequest && isAIIntervention && (
+        <AIInterventionPrompt
+          isOpen={showAIIntervention}
+          onClose={() => setShowAIIntervention(false)}
+          onConfirm={() => {
+            setShowAIIntervention(false)
+            respondUserInput(userInputRequest.node_id, 'continue')
+          }}
+          onCancel={() => {
+            setShowAIIntervention(false)
+            respondUserInput(userInputRequest.node_id, 'cancel')
+          }}
+        />
+      )}
+
+      {/* 普通用户干预弹窗 - 非 AI 干预时显示 */}
+      {userInputRequest && !isAIIntervention && (
         <UserInputDialog
           request={userInputRequest}
           onResponse={respondUserInput}
         />
       )}
-
-      {/* AI干预提示弹窗 */}
-      <AIInterventionPrompt
-        isOpen={showAIIntervention}
-        onClose={() => setShowAIIntervention(false)}
-        onConfirm={() => {
-          setShowAIIntervention(false)
-          respondUserInput(executionState.executionId!, 'continue')
-        }}
-        onCancel={() => {
-          setShowAIIntervention(false)
-          respondUserInput(executionState.executionId!, 'cancel')
-        }}
-      />
 
       {/* 简洁模式布局 */}
       <CompactModeLayout />
@@ -89,104 +105,81 @@ export function ExecutionPanel() {
   )
 }
 
-// 可拖拽调整大小的区域组件
-interface ResizableSectionProps {
-  title: string
-  defaultHeight: number
-  minHeight?: number
-  maxHeight?: number
-  children: React.ReactNode
-  className?: string
-}
-
-function ResizableSection({
-  title,
-  defaultHeight,
-  minHeight = 100,
-  maxHeight = 600,
-  children,
-  className = '',
-}: ResizableSectionProps) {
-  const [height, setHeight] = useState(defaultHeight)
-
-  return (
-    <Resizable
-      size={{ width: '100%', height }}
-      minHeight={minHeight}
-      maxHeight={maxHeight}
-      onResizeStop={(_e, _direction, _ref, d) => {
-        setHeight(height + d.height)
-      }}
-      enable={{
-        top: true,
-        right: false,
-        bottom: true,
-        left: false,
-        topRight: false,
-        bottomRight: false,
-        bottomLeft: false,
-        topLeft: false,
-      }}
-      handleStyles={{
-        top: {
-          top: 0,
-          height: '4px',
-          cursor: 'ns-resize',
-          backgroundColor: 'transparent',
-        },
-        bottom: {
-          bottom: 0,
-          height: '4px',
-          cursor: 'ns-resize',
-          backgroundColor: 'transparent',
-        },
-      }}
-      handleClasses={{
-        top: 'hover:bg-blue-400/30 transition-colors',
-        bottom: 'hover:bg-blue-400/30 transition-colors',
-      }}
-      className={`border-t border-gray-200 ${className}`}
-    >
-      <h3 className="text-sm font-medium p-2 select-none">{title}</h3>
-      <div className="overflow-auto" style={{ height: 'calc(100% - 36px)' }}>
-        {children}
-      </div>
-    </Resizable>
-  )
-}
-
 // 简洁模式布局组件
 function CompactModeLayout() {
   const { executionState } = useExecutionStore()
   const { screenshot, nodeRecords, logs } = executionState
+  const [screenshotHeight, setScreenshotHeight] = useState(200)
+  const [logsHeight, setLogsHeight] = useState(150)
+  const startYRef = useRef(0)
+  const startHeightRef = useRef(0)
+  const dragTypeRef = useRef<'screenshot' | 'logs' | null>(null)
+
+  const handleMouseDown = (type: 'screenshot' | 'logs') => (e: React.MouseEvent) => {
+    e.preventDefault()
+    dragTypeRef.current = type
+    startYRef.current = e.clientY
+    startHeightRef.current = type === 'screenshot' ? screenshotHeight : logsHeight
+    const onMove = (e: MouseEvent) => {
+      if (!dragTypeRef.current) return
+      const deltaY = e.clientY - startYRef.current
+      if (dragTypeRef.current === 'screenshot') {
+        setScreenshotHeight(Math.min(Math.max(startHeightRef.current - deltaY, 120), 500))
+      } else {
+        setLogsHeight(Math.min(Math.max(startHeightRef.current - deltaY, 100), 400))
+      }
+    }
+    const onUp = () => {
+      dragTypeRef.current = null
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* 节点列表 */}
       <div className="flex-1 overflow-y-auto p-4 min-h-0">
         <h3 className="text-sm font-medium mb-2">节点列表</h3>
         <NodeRecordList records={nodeRecords} />
       </div>
 
-      {/* 实时截图 - 可拖拽调整大小 */}
-      <ResizableSection title="实时截图" defaultHeight={200} minHeight={120} maxHeight={500}>
-        {screenshot ? (
-          <img
-            src={`data:image/jpeg;base64,${screenshot}`}
-            alt="执行截图"
-            className="max-w-full rounded p-2"
-          />
-        ) : (
-          <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-            等待截图...
-          </div>
-        )}
-      </ResizableSection>
+      <div className="cursor-ns-resize h-1.5 bg-gray-100 hover:bg-blue-400 transition-colors flex-shrink-0"
+        onMouseDown={handleMouseDown('screenshot')}
+      />
 
-      {/* 日志 - 可拖拽调整大小 */}
-      <ResizableSection title="日志" defaultHeight={150} minHeight={100} maxHeight={400}>
-        <LogViewer logs={logs} compact />
-      </ResizableSection>
+      <div className="flex-shrink-0 overflow-hidden" style={{ height: screenshotHeight }}>
+        <div className="flex items-center justify-between px-2 py-1 border-t border-gray-200 bg-gray-50">
+          <h3 className="text-sm font-medium">实时截图</h3>
+        </div>
+        <div className="overflow-auto" style={{ height: screenshotHeight - 32 }}>
+          {screenshot ? (
+            <img
+              src={`data:image/jpeg;base64,${screenshot}`}
+              alt="执行截图"
+              className="max-w-full rounded p-2"
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+              等待截图...
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="cursor-ns-resize h-1.5 bg-gray-100 hover:bg-blue-400 transition-colors flex-shrink-0"
+        onMouseDown={handleMouseDown('logs')}
+      />
+
+      <div className="flex-shrink-0 overflow-hidden" style={{ height: logsHeight }}>
+        <div className="flex items-center justify-between px-2 py-1 border-t border-gray-200 bg-gray-50">
+          <h3 className="text-sm font-medium">日志</h3>
+        </div>
+        <div className="overflow-auto" style={{ height: logsHeight - 32 }}>
+          <LogViewer logs={logs} compact />
+        </div>
+      </div>
     </div>
   )
 }
@@ -411,29 +404,31 @@ function UserInputDialog({ request, onResponse }: UserInputDialogProps) {
   }
 
   return (
-    <div className={`p-4 border-b ${twSemanticColors.border.default} ${twColors.status.warning.bg}`}>
-      <div className="flex items-start gap-3">
-        <span className="text-2xl">🙋</span>
-        <div className="flex-1">
-          <h4 className={`font-medium ${twColors.status.warning.text}`}>需要用户操作</h4>
-          <p className={`text-sm mt-1 ${twSemanticColors.text.secondary}`}>{request.prompt}</p>
-          <div className="flex gap-2 mt-3">
-            <Button
-              onClick={handleContinue}
-              loading={isContinuing}
-              variant="primary"
-              size="sm"
-            >
-              继续执行
-            </Button>
-            <Button
-              onClick={handleCancel}
-              loading={isCancelling}
-              variant="secondary"
-              size="sm"
-            >
-              取消
-            </Button>
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
+      <div className={`bg-amber-50 border border-amber-200 rounded-lg shadow-lg p-4 max-w-md`}>
+        <div className="flex items-start gap-3">
+          <span className="text-xl">🙋</span>
+          <div className="flex-1">
+            <h4 className="font-medium text-amber-800">需要用户操作</h4>
+            <p className="text-sm mt-1 text-amber-700">{request.prompt}</p>
+            <div className="flex gap-2 mt-3">
+              <Button
+                onClick={handleContinue}
+                loading={isContinuing}
+                variant="primary"
+                size="sm"
+              >
+                继续执行
+              </Button>
+              <Button
+                onClick={handleCancel}
+                loading={isCancelling}
+                variant="secondary"
+                size="sm"
+              >
+                取消
+              </Button>
+            </div>
           </div>
         </div>
       </div>

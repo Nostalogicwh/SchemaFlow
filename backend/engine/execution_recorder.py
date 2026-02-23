@@ -1,4 +1,5 @@
 """执行记录器 - 负责执行记录的构建和持久化。"""
+
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -19,10 +20,7 @@ class ExecutionRecorder:
         self.node_records: Dict[str, NodeExecutionRecord] = {}
 
     def start_node(
-        self,
-        node_id: str,
-        node_type: str,
-        node_label: str
+        self, node_id: str, node_type: str, node_label: str
     ) -> NodeExecutionRecord:
         """创建并返回节点执行记录。
 
@@ -45,10 +43,7 @@ class ExecutionRecorder:
         return record
 
     def complete_node(
-        self,
-        record: NodeExecutionRecord,
-        result: Any,
-        context_logs: list
+        self, record: NodeExecutionRecord, result: Any, context_logs: list
     ) -> None:
         """标记节点完成。
 
@@ -60,17 +55,19 @@ class ExecutionRecorder:
         record.status = NodeStatus.COMPLETED.value
         record.finished_at = datetime.now().isoformat()
         record.duration_ms = int(
-            (datetime.fromisoformat(record.finished_at) -
-             datetime.fromisoformat(record.started_at)).total_seconds() * 1000
+            (
+                datetime.fromisoformat(record.finished_at)
+                - datetime.fromisoformat(record.started_at)
+            ).total_seconds()
+            * 1000
         )
         record.result = result if isinstance(result, dict) else {"value": result}
-        record.logs = [log for log in context_logs if log.get("node_id") == record.node_id]
+        record.logs = [
+            log for log in context_logs if log.get("node_id") == record.node_id
+        ]
 
     def fail_node(
-        self,
-        record: NodeExecutionRecord,
-        error: str,
-        context_logs: list
+        self, record: NodeExecutionRecord, error: str, context_logs: list
     ) -> None:
         """标记节点失败。
 
@@ -82,11 +79,16 @@ class ExecutionRecorder:
         record.status = NodeStatus.FAILED.value
         record.finished_at = datetime.now().isoformat()
         record.duration_ms = int(
-            (datetime.fromisoformat(record.finished_at) -
-             datetime.fromisoformat(record.started_at)).total_seconds() * 1000
+            (
+                datetime.fromisoformat(record.finished_at)
+                - datetime.fromisoformat(record.started_at)
+            ).total_seconds()
+            * 1000
         )
         record.error = error
-        record.logs = [log for log in context_logs if log.get("node_id") == record.node_id]
+        record.logs = [
+            log for log in context_logs if log.get("node_id") == record.node_id
+        ]
 
     async def save(self, context: ExecutionContext, workflow: Dict[str, Any]) -> None:
         """持久化执行记录到 repository。
@@ -96,23 +98,33 @@ class ExecutionRecorder:
             workflow: 工作流配置
         """
         try:
-            from repository import get_execution_repo
+            from persistence import get_execution_repo
+
             repo = get_execution_repo()
             execution_log = {
                 "execution_id": context.execution_id,
                 "workflow_id": context.workflow_id,
                 "status": context.status.value,
-                "started_at": context.start_time.isoformat() if context.start_time else None,
-                "finished_at": context.end_time.isoformat() if context.end_time else None,
-                "duration_ms": int((context.end_time - context.start_time).total_seconds() * 1000)
-                    if context.start_time and context.end_time else None,
+                "started_at": context.start_time.isoformat()
+                if context.start_time
+                else None,
+                "finished_at": context.end_time.isoformat()
+                if context.end_time
+                else None,
+                "duration_ms": int(
+                    (context.end_time - context.start_time).total_seconds() * 1000
+                )
+                if context.start_time and context.end_time
+                else None,
                 "total_nodes": len(workflow.get("nodes", [])),
                 "completed_nodes": sum(
-                    1 for r in self.node_records.values()
+                    1
+                    for r in self.node_records.values()
                     if r.status == NodeStatus.COMPLETED.value
                 ),
                 "failed_nodes": sum(
-                    1 for r in self.node_records.values()
+                    1
+                    for r in self.node_records.values()
                     if r.status == NodeStatus.FAILED.value
                 ),
                 "node_records": [r.to_dict() for r in self.node_records.values()],

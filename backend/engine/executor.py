@@ -13,13 +13,15 @@ logger = logging.getLogger(__name__)
 from fastapi import WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
 
+from playwright.async_api import Error as PlaywrightError
+
 from .context import ExecutionContext, ExecutionStatus
 from .constants import WSMessageType
 from .actions import registry
 from .actions.utils import resolve_variables
 from .browser_manager import BrowserManager
 from .execution_recorder import ExecutionRecorder
-from .ai_intervention_detector import detect_intervention
+from .ai import detect_intervention
 
 
 def topological_sort(nodes: List[Dict], edges: List[Dict]) -> List[str]:
@@ -96,7 +98,15 @@ class WorkflowExecutor:
             websocket=websocket,
             data_dir=self.data_dir,
         )
-        context._storage_state = storage_state  # 存储前端传入的凭证
+        context._storage_state = storage_state
+        if storage_state:
+            cookies_count = len(storage_state.get("cookies", []))
+            origins_count = len(storage_state.get("origins", []))
+            logger.info(
+                f"[{execution_id}] 收到前端凭证: cookies={cookies_count}, origins={origins_count}"
+            )
+        else:
+            logger.info(f"[{execution_id}] 无历史凭证")
 
         async with self._get_lock():
             self.active_executions[execution_id] = context
@@ -210,7 +220,6 @@ class WorkflowExecutor:
                 result = await execute_func(context, resolved_config)
                 logger.info(f"[{context.execution_id}] 节点成功: {node_id}")
 
-                # 节点执行后检查取消状态
                 await context.check_cancelled()
 
                 recorder.complete_node(record, result, context.logs)
@@ -227,6 +236,36 @@ class WorkflowExecutor:
                     )
 
                 await context.send_screenshot()
+
+            except PlaywrightError as e:
+                if getattr(
+                    e, "name", None
+                ) == "TargetClosedError" or "Target closed" in str(e):
+                    logger.info(
+                        f"[{context.execution_id}] 节点 {node_id} 因页面关闭而终止"
+                    )
+                    recorder.fail_node(record, "执行被用户取消", context.logs)
+                    context.status = ExecutionStatus.CANCELLED
+                    if context.websocket:
+                        try:
+                            await context.websocket.send_json(
+                                {
+                                    "type": WSMessageType.NODE_COMPLETE.value,
+                                    "node_id": node_id,
+                                    "success": False,
+                                    "error": "执行被用户取消",
+                                    "record": record.to_dict(),
+                                }
+                            )
+                        except (ConnectionClosed, WebSocketDisconnect):
+                            pass
+                    return
+                raise
+
+            except asyncio.CancelledError:
+                logger.info(f"[{context.execution_id}] 节点 {node_id} 被取消")
+                recorder.fail_node(record, "执行被取消", context.logs)
+                raise
 
             except Exception as e:
                 recorder.fail_node(record, str(e), context.logs)
@@ -279,14 +318,19 @@ class WorkflowExecutor:
                 custom_context = getattr(context, "_context", None)
                 if custom_context:
                     latest_state = await custom_context.storage_state()
+                    cookies_count = len(latest_state.get("cookies", []))
+                    origins_count = len(latest_state.get("origins", []))
+                    logger.info(
+                        f"[{context.execution_id}] 提取凭证完成: "
+                        f"cookies={cookies_count}, origins={origins_count}"
+                    )
                     if context.websocket:
                         await context.websocket.send_json(
                             {"type": "storage_state_update", "data": latest_state}
                         )
-                        logger.info(f"[{context.execution_id}] 已下发最新凭证")
+                        logger.info(f"[{context.execution_id}] 已下发最新凭证到前端")
             except Exception as e:
                 logger.warning(f"[{context.execution_id}] 提取凭证失败: {e}")
-                # 非关键路径，不阻塞执行
 
         await recorder.save(context, workflow)
 
@@ -304,7 +348,7 @@ class WorkflowExecutor:
     async def stop(self, execution_id: str):
         """停止指定执行的工作流。
 
-        设置取消标志并清理相关资源。正在执行的节点会检查取消标志并终止。
+        设置取消标志并强制中断 Playwright 操作。
 
         Args:
             execution_id: 要停止的执行ID
@@ -313,14 +357,12 @@ class WorkflowExecutor:
         async with self._get_lock():
             context = self.active_executions.get(execution_id)
             if context:
-                # 先设置取消标志，让正在执行的操作能够检测到
                 previous_status = context.status
                 context.status = ExecutionStatus.CANCELLED
                 logger.info(
                     f"[{execution_id}] 状态已从 {previous_status.value} 设置为 CANCELLED"
                 )
 
-                # 发送取消消息通知前端
                 if context.websocket:
                     try:
                         await context.websocket.send_json(
@@ -330,18 +372,25 @@ class WorkflowExecutor:
                             }
                         )
                         logger.info(f"[{execution_id}] 已发送 EXECUTION_CANCELLED 消息")
-                    except ConnectionClosed:
-                        await context.log(
-                            "debug", "WebSocket连接已关闭，无法发送取消消息"
-                        )
-                    except WebSocketDisconnect:
-                        await context.log("debug", "WebSocket已断开，无法发送取消消息")
+                    except (ConnectionClosed, WebSocketDisconnect) as e:
+                        logger.debug(f"[{execution_id}] WebSocket 已断开: {e}")
                     except Exception as e:
                         logger.warning(f"[{execution_id}] 发送取消消息失败: {e}")
 
-                # 延迟清理浏览器资源，给正在执行的节点时间响应取消
-                # 浏览器清理会在节点执行完成后由 _cleanup 处理
-                logger.info(f"[{execution_id}] 取消标志已设置，等待正在执行的操作终止")
+                try:
+                    if context.page:
+                        await context.page.close()
+                        logger.info(f"[{execution_id}] 已强制关闭页面")
+                    custom_context = getattr(context, "_context", None)
+                    if custom_context:
+                        await custom_context.close()
+                        logger.info(f"[{execution_id}] 已强制关闭浏览器上下文")
+                except Exception as e:
+                    logger.debug(
+                        f"[{execution_id}] 强制关闭浏览器资源时出错（可忽略）: {e}"
+                    )
+
+                logger.info(f"[{execution_id}] 取消完成，Playwright 操作已强制中断")
             else:
                 logger.warning(f"[{execution_id}] 未找到活跃的执行上下文")
 

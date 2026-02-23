@@ -40,7 +40,7 @@ async def locate_element(
     enable_ai_fallback = getattr(context, "enable_ai_fallback", True)
 
     # 使用混合定位器
-    from ..ai_target_locator import HybridElementLocator
+    from ..ai.locator import HybridElementLocator
 
     locator_manager = HybridElementLocator(page, context)
 

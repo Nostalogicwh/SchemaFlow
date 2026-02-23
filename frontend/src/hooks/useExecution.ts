@@ -11,50 +11,67 @@ interface UseExecutionOptions {
 export function useExecution(options: UseExecutionOptions = {}) {
   const { autoReconnect = true, reconnectInterval = 3000 } = options
 
-  const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
   const workflowIdRef = useRef<string | null>(null)
+  const executionIdRef = useRef<string | null>(null)
 
-  const { setConnected, setExecutionId, reset, showPanel, setShowPanel, executionMode, setExecutionMode, executionState } =
-    useExecutionStore()
+  const {
+    setConnected,
+    setExecutionId,
+    reset,
+    showPanel,
+    setShowPanel,
+    executionMode,
+    setExecutionMode,
+    executionState,
+    setWebSocket,
+    sendWS,
+    setCurrentWorkflowId,
+  } = useExecutionStore()
 
   const connectRef = useRef<(executionId: string, workflowId?: string) => void>(() => {})
 
   const connect = useCallback(
     (executionId: string, workflowId?: string) => {
-      if (wsRef.current) {
-        wsRef.current.close()
+      const oldWs = useExecutionStore.getState()._ws
+      if (oldWs) {
+        oldWs.close()
       }
 
       if (workflowId) {
         workflowIdRef.current = workflowId
+        setCurrentWorkflowId(workflowId)
       }
+      executionIdRef.current = executionId
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       const host = window.location.host
       const url = `${protocol}//${host}/api/ws/execution/${executionId}`
 
       const ws = new WebSocket(url)
-      wsRef.current = ws
+      setWebSocket(ws)
 
       ws.onopen = () => {
         setConnected(true)
         setExecutionId(executionId)
+        console.log(`[WebSocket] 已连接: ${executionId}`)
       }
 
       ws.onclose = () => {
         setConnected(false)
-        if (autoReconnect && executionState.isRunning) {
+        console.log(`[WebSocket] 已断开`)
+        if (autoReconnect && useExecutionStore.getState().executionState.isRunning) {
           reconnectTimerRef.current = window.setTimeout(() => {
-            if (executionId) {
-              connectRef.current(executionId)
+            const execId = executionIdRef.current
+            if (execId) {
+              connectRef.current(execId)
             }
           }, reconnectInterval)
         }
       }
 
       ws.onerror = (error) => {
-        console.error('WebSocket 错误:', error)
+        console.error('[WebSocket] 错误:', error)
       }
 
       ws.onmessage = (event) => {
@@ -62,11 +79,11 @@ export function useExecution(options: UseExecutionOptions = {}) {
           const message: WSMessage = JSON.parse(event.data)
           useExecutionStore.getState().handleMessage(message)
         } catch (e) {
-          console.error('解析 WebSocket 消息失败:', e)
+          console.error('[WebSocket] 解析消息失败:', e)
         }
       }
     },
-    [autoReconnect, reconnectInterval, setConnected, setExecutionId, executionState.isRunning]
+    [autoReconnect, reconnectInterval, setConnected, setExecutionId, setWebSocket, setCurrentWorkflowId]
   )
 
   useEffect(() => {
@@ -77,62 +94,74 @@ export function useExecution(options: UseExecutionOptions = {}) {
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current)
     }
-    if (wsRef.current) {
-      wsRef.current.close()
-      wsRef.current = null
+    const ws = useExecutionStore.getState()._ws
+    if (ws) {
+      ws.close()
+      setWebSocket(null)
     }
     setConnected(false)
-  }, [setConnected])
-
-  const send = useCallback((message: WSMessage) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message))
-    }
-  }, [])
+  }, [setConnected, setWebSocket])
 
   const startExecution = useCallback(
     async (workflowId?: string, mode: 'headless' | 'headed' = 'headless') => {
       const wfId = (typeof workflowId === 'string' ? workflowId : null) || workflowIdRef.current
       if (wfId) {
-        // 从 IndexedDB 获取凭证
         const credentials = await credentialStore.get(wfId)
-        send({ 
-          type: 'start_execution', 
-          workflow_id: wfId, 
+        if (credentials) {
+          console.log(`[startExecution] 注入凭证: workflow=${wfId}, cookies=${credentials.cookies?.length || 0}`)
+        } else {
+          console.log(`[startExecution] 无历史凭证: workflow=${wfId}`)
+        }
+        sendWS({
+          type: 'start_execution',
+          workflow_id: wfId,
           mode,
-          injected_storage_state: credentials  // 可能为 null
+          injected_storage_state: credentials
         })
       } else {
         console.error('startExecution: 缺少 workflow_id')
       }
     },
-    [send]
+    [sendWS]
   )
 
-  const stopExecution = useCallback(() => {
-    send({ type: 'stop_execution' })
-  }, [send])
+  const stopExecution = useCallback(
+    async (executionId?: string) => {
+      sendWS({ type: 'stop_execution' })
+
+      const execId = executionId || executionState.executionId
+      if (execId) {
+        try {
+          await fetch(`/api/executions/${execId}/stop`, { method: 'POST' })
+        } catch (e) {
+          console.error('REST stop 失败:', e)
+        }
+      }
+    },
+    [sendWS, executionState.executionId]
+  )
 
   const respondUserInput = useCallback(
     (nodeId: string, action: 'continue' | 'cancel') => {
-      send({
+      console.log(`[respondUserInput] 发送响应: node_id=${nodeId}, action=${action}`)
+      sendWS({
         type: 'user_input_response',
         node_id: nodeId,
         action,
       })
       useExecutionStore.getState().setUserInputRequest(null)
     },
-    [send]
+    [sendWS]
   )
 
   const confirmLogin = useCallback(
     (executionId: string) => {
-      send({
+      sendWS({
         type: 'login_confirmed',
         execution_id: executionId
       })
     },
-    [send]
+    [sendWS]
   )
 
   useEffect(() => {
@@ -147,7 +176,7 @@ export function useExecution(options: UseExecutionOptions = {}) {
     startExecution,
     stopExecution,
     respondUserInput,
-    confirmLogin,  // 新增
+    confirmLogin,
     reset,
     showPanel,
     setShowPanel,

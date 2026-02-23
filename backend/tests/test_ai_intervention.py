@@ -12,9 +12,6 @@ import sys
 import asyncio
 from pathlib import Path
 
-# 添加backend到路径
-sys.path.insert(0, str(Path(__file__).parent))
-
 
 def test_node_schemas():
     """测试所有非base节点都包含AI干预配置"""
@@ -47,7 +44,7 @@ def test_ai_intervention_detector():
     """测试AI干预检测器模块"""
     print("\n测试2: 验证AI干预检测器...")
 
-    from engine.ai_intervention_detector import (
+    from engine.ai import (
         AIInterventionDetector,
         InterventionType,
         detect_intervention,

@@ -14,11 +14,11 @@ interface ExecutionStoreState {
   executionState: ExecutionState
   showPanel: boolean
   executionMode: 'headless' | 'headed'
-  // 新增：登录态相关状态
   loginRequired: boolean
   loginReason: string | null
   loginUrl: string | null
   currentWorkflowId: string | null
+  _ws: WebSocket | null
 }
 
 interface ExecutionStoreActions {
@@ -34,9 +34,10 @@ interface ExecutionStoreActions {
   setExecutionMode: (mode: 'headless' | 'headed') => void
   reset: () => void
   handleMessage: (message: WSMessage) => void
-  // 新增
   setLoginRequired: (required: boolean, reason?: string | null, url?: string | null) => void
   setCurrentWorkflowId: (id: string | null) => void
+  setWebSocket: (ws: WebSocket | null) => void
+  sendWS: (message: WSMessage) => void
 }
 
 type ExecutionStore = ExecutionStoreState & ExecutionStoreActions
@@ -57,12 +58,11 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   executionState: initialExecutionState,
   showPanel: false,
   executionMode: 'headless',
-  // 新增
   loginRequired: false,
   loginReason: null,
   loginUrl: null,
   currentWorkflowId: null,
-  viewMode: 'compact',  // 默认简洁模式
+  _ws: null,
 
   setConnected: (connected) => set({ isConnected: connected }),
 
@@ -123,6 +123,17 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
 
   setCurrentWorkflowId: (id) =>
     set({ currentWorkflowId: id }),
+
+  setWebSocket: (ws) => set({ _ws: ws }),
+
+  sendWS: (message) => {
+    const ws = get()._ws
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(message))
+    } else {
+      console.warn('[sendWS] WebSocket 未连接，无法发送消息:', message.type)
+    }
+  },
 
   reset: () => set({ executionState: initialExecutionState }),
 
@@ -185,6 +196,17 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
         }))
         break
 
+      case 'execution_cancelled':
+        set((state) => ({
+          executionState: {
+            ...state.executionState,
+            isRunning: false,
+            currentNodeId: null,
+            userInputRequest: null,
+          },
+        }))
+        break
+
       case 'error':
         addLog({
           type: 'log',
@@ -198,14 +220,14 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
         break
 
       case 'storage_state_update':
-        // 保存后端下发的最新凭证
         if (message.data && get().currentWorkflowId) {
-          credentialStore.save(get().currentWorkflowId!, message.data as StorageState)
+          const state = message.data as StorageState
+          console.log(`[executionStore] 收到凭证更新: cookies=${state.cookies?.length || 0}, origins=${state.origins?.length || 0}`)
+          credentialStore.save(get().currentWorkflowId!, state)
         }
         break
 
       case 'require_manual_login':
-        // 设置状态，触发 UI 显示人机协同面板
         set({
           loginRequired: true,
           loginReason: message.reason as string | null,
@@ -214,13 +236,10 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
         break
 
       case 'login_confirmation_received':
-        // 登录确认已收到，可以隐藏登录面板
         set({ loginRequired: false })
         break
 
       case 'debug_locator_result':
-        // AI定位器调试结果
-        // 可以通过自定义事件或全局状态传递给DebugLocatorModal组件
         if (typeof window !== 'undefined') {
           const event = new CustomEvent('debugLocatorResult', {
             detail: {

@@ -1,11 +1,9 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { confirm as confirmDialog, toast } from '@/stores/uiStore'
-import type { WorkflowListItem } from '@/types/workflow'
-import { workflowApi } from '@/api'
 import { LoadingSpinner, EmptyState } from '@/components/common'
 import { Modal } from '@/components/ui/Modal'
-import { Search, FileText, Plus, RefreshCw, Trash2, Play } from 'lucide-react'
+import { Search, FileText, Plus, Trash2, Play } from 'lucide-react'
 import { useExecutionStore } from '@/stores/executionStore'
 import { useExecution } from '@/hooks/useExecution'
 import { Input } from '@/components/ui/Input'
@@ -16,7 +14,6 @@ interface WorkflowListProps {
   selectedId: string | null
   onSelect: (id: string) => void
   onCreate?: () => void
-  refreshKey?: number
 }
 
 function formatRelativeTime(dateStr?: string): string {
@@ -35,16 +32,14 @@ function formatRelativeTime(dateStr?: string): string {
   return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 
-export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: WorkflowListProps) {
-  const [workflows, setWorkflows] = useState<WorkflowListItem[]>([])
-  const [loading, setLoading] = useState(true)
+export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListProps) {
+  const { workflows, isLoadingList, loadWorkflows, removeWorkflowFromList } = useWorkflowStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [newWorkflowName, setNewWorkflowName] = useState('')
   const [newWorkflowDescription, setNewWorkflowDescription] = useState('')
   const [nameError, setNameError] = useState('')
   const [isCreating, setIsCreating] = useState(false)
-  const refreshList = useWorkflowStore((state) => state.refreshList)
   const { setShowPanel, setCurrentWorkflowId } = useExecutionStore()
   const { startExecution } = useExecution()
 
@@ -93,19 +88,12 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
 
     setIsCreating(true)
     try {
-      const newWorkflow = await workflowApi.create({
-        name: newWorkflowName.trim(),
-        description: newWorkflowDescription.trim() || undefined,
-        nodes: [],
-        edges: [],
-      })
-      
-      setWorkflows((prev) => [newWorkflow, ...prev])
-      refreshList()
-      handleCloseCreateModal()
+      const newWorkflow = await useWorkflowStore.getState().createWorkflow(newWorkflowName.trim())
+      setNewWorkflowName('')
+      setNewWorkflowDescription('')
+      setNameError('')
+      setIsCreateModalOpen(false)
       toast.success('工作流创建成功')
-      
-      // 自动选中新创建的工作流
       onSelect(newWorkflow.id)
     } catch (error) {
       console.error('创建工作流失败:', error)
@@ -124,21 +112,9 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
     setNewWorkflowDescription(e.target.value)
   }
 
-  const loadWorkflows = async () => {
-    try {
-      setLoading(true)
-      const list = await workflowApi.list()
-      setWorkflows(list)
-    } catch (error) {
-      console.error('加载工作流列表失败:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
     loadWorkflows()
-  }, [refreshKey])
+  }, [])
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -146,9 +122,9 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
     if (!confirmed) return
 
     try {
+      const { workflowApi } = await import('@/api')
       await workflowApi.delete(id)
-      setWorkflows((prev) => prev.filter((w) => w.id !== id))
-      refreshList()
+      removeWorkflowFromList(id)
     } catch (error) {
       console.error('删除工作流失败:', error)
     }
@@ -164,7 +140,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
     )
   }, [workflows, searchQuery])
 
-  if (loading) {
+  if (isLoadingList && workflows.length === 0) {
     return (
       <div className="h-full flex items-center justify-center">
         <LoadingSpinner label="加载中..." />
@@ -282,8 +258,9 @@ export function WorkflowList({ selectedId, onSelect, onCreate, refreshKey }: Wor
         <Button
           variant="ghost"
           size="sm"
-          icon={<RefreshCw className="w-3.5 h-3.5" />}
           onClick={loadWorkflows}
+          disabled={isLoadingList}
+          loading={isLoadingList}
           className="w-full"
         >
           刷新列表
