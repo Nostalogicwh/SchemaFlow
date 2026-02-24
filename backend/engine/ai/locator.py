@@ -775,8 +775,20 @@ class HybridElementLocator:
             locator = self.page.locator(selector)
             await locator.wait_for(state="visible", timeout=timeout)
             count = await locator.count()
-            return count > 0
-        except Exception:
+            is_valid = count > 0
+            if is_valid:
+                await self.context.log(
+                    "debug", f"CSS选择器验证成功: {selector} (匹配 {count} 个)"
+                )
+            else:
+                await self.context.log(
+                    "warning", f"CSS选择器验证失败: {selector} (未匹配到元素)"
+                )
+            return is_valid
+        except Exception as e:
+            await self.context.log(
+                "warning", f"CSS选择器验证失败: {selector}, 错误: {str(e)}"
+            )
             return False
 
     async def _locate_with_ai(

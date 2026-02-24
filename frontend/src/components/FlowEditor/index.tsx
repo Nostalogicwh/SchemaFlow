@@ -71,7 +71,7 @@ function StorageStateIndicator({ workflowId }: { workflowId: string }) {
   if (!hasStorageState) return null
 
   return (
-    <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 text-xs rounded-lg border border-blue-200 shadow-sm">
+    <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 text-xs rounded-lg border border-blue-200 shadow-sm">
       <Database className="w-4 h-4" />
       <span>已保存网站状态</span>
       <button
