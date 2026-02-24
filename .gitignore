@@ -13,6 +13,8 @@ build/
 .env
 .venv/
 venv/
+settings.local.toml
+backend/config.local.yaml
 
 # IDE
 .idea/
@@ -21,10 +23,11 @@ venv/
 *.swo
 
 # Data (keep structure, ignore content)
-data/workflows/*.json
-data/logs/*.json
-!data/workflows/.gitkeep
-!data/logs/.gitkeep
+backend/data/workflows/*.json
+backend/data/logs/*.json
+backend/data/db/
+!backend/data/workflows/.gitkeep
+!backend/data/logs/.gitkeep
 
 # OS
 .DS_Store
@@ -33,3 +36,4 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+.worktrees/

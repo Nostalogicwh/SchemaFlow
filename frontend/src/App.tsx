@@ -1,208 +1,140 @@
-/**
- * SchemaFlow 主应用
- */
-import { useState, useCallback, useEffect } from 'react'
+import { useCallback, useState } from 'react'
 import { FlowEditor } from '@/components/FlowEditor'
 import { WorkflowList } from '@/components/WorkflowList'
 import { ExecutionPanel } from '@/components/ExecutionPanel'
-import { useWebSocket } from '@/hooks/useWebSocket'
+import { Header } from '@/components/Header'
+import { Toast, ErrorBoundary, ConfirmDialog, EmptyState } from '@/components/common'
+import { Rocket } from 'lucide-react'
+import { useWorkflowStore } from '@/stores/workflowStore'
+import { useExecutionStore } from '@/stores/executionStore'
+import { toast } from '@/stores/uiStore'
+import { useExecution } from '@/hooks/useExecution'
+import { useErrorHandler } from '@/hooks/useErrorHandler'
 import { workflowApi } from '@/api'
-import type { Workflow } from '@/types/workflow'
-
-// 从 localStorage 检查凭证状态
-const checkCredentialStatus = (workflowId: string): boolean => {
-  try {
-    const key = `workflow_creds_${workflowId}`
-    const data = localStorage.getItem(key)
-    if (data) {
-      const parsed = JSON.parse(data)
-      return !!(parsed.cookies?.length > 0)
-    }
-  } catch {
-    // 忽略错误
-  }
-  return false
-}
 
 function App() {
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null)
-  const [currentWorkflow, setCurrentWorkflow] = useState<Workflow | null>(null)
-  const [showExecution, setShowExecution] = useState(false)
-  const [hasCachedCredentials, setHasCachedCredentials] = useState(false)
+  const { currentWorkflow, selectedId, saveWorkflow } = useWorkflowStore()
 
-  // 更新工作流节点配置（用于 AI 定位回填选择器）
-  const handleUpdateNodeConfig = useCallback((nodeId: string, config: Record<string, unknown>) => {
-    if (!currentWorkflow) return
+  const { showPanel, executionMode, executionState, setShowPanel } =
+    useExecutionStore()
 
-    const updatedWorkflow: Workflow = {
-      ...currentWorkflow,
-      nodes: currentWorkflow.nodes.map(node =>
-        node.id === nodeId
-          ? { ...node, config: { ...node.config, ...config } }
-          : node
-      )
-    }
+  const { connect, startExecution, stopExecution, reset: resetExecution } = useExecution()
+  const handleError = useErrorHandler()
 
-    setCurrentWorkflow(updatedWorkflow)
-    console.log(`[App] 节点 ${nodeId} 配置已更新:`, config)
-  }, [currentWorkflow])
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
-  const {
-    isConnected,
-    executionState,
-    connect,
-    startExecution,
-    stopExecution,
-    respondUserInput,
-    reset,
-  } = useWebSocket({
-    onSelectorUpdate: handleUpdateNodeConfig
-  })
+  const handleExecute = useCallback(async () => {
+    if (!selectedId) return
 
-  // 选择工作流
-  const handleSelectWorkflow = useCallback(async (id: string) => {
     try {
-      const workflow = await workflowApi.get(id)
-      setSelectedWorkflowId(id)
-      setCurrentWorkflow(workflow)
-      setHasCachedCredentials(checkCredentialStatus(id))
-      reset()
+      const { execution_id } = await workflowApi.execute(selectedId)
+      connect(execution_id, selectedId)
+      setShowPanel(true)
+      setTimeout(() => startExecution(selectedId, executionMode), 500)
     } catch (error) {
-      console.error('加载工作流失败:', error)
+      handleError(error, '执行工作流失败')
     }
-  }, [reset])
+  }, [selectedId, connect, startExecution, executionMode, setShowPanel, handleError])
 
-  // 创建新工作流
+  const handleSelectWorkflow = useCallback(
+    async (id: string) => {
+      try {
+        await useWorkflowStore.getState().selectWorkflow(id)
+        resetExecution()
+      } catch (error) {
+        handleError(error, '加载工作流失败')
+      }
+    },
+    [resetExecution, handleError]
+  )
+
   const handleCreateWorkflow = useCallback(async () => {
     const name = prompt('请输入工作流名称:')
     if (!name) return
 
     try {
-      const workflow = await workflowApi.create({
-        name,
-        description: '',
-        nodes: [
-          { id: 'start_1', type: 'start', config: {} },
-          { id: 'end_1', type: 'end', config: {} },
-        ],
-        edges: [{ source: 'start_1', target: 'end_1' }],
-      })
-      setSelectedWorkflowId(workflow.id)
-      setCurrentWorkflow(workflow)
+      await useWorkflowStore.getState().createWorkflow(name)
     } catch (error) {
-      console.error('创建工作流失败:', error)
+      handleError(error, '创建工作流失败')
     }
-  }, [])
+  }, [handleError])
 
-  // 保存工作流
-  const handleSaveWorkflow = useCallback(async (workflow: Workflow) => {
-    try {
-      await workflowApi.update(workflow.id, workflow)
-      setCurrentWorkflow(workflow)
-      alert('保存成功')
-    } catch (error) {
-      console.error('保存工作流失败:', error)
-      alert('保存失败')
-    }
-  }, [])
-
-  // 执行工作流
-  const handleExecute = useCallback(async () => {
-    if (!selectedWorkflowId) return
-
-    try {
-      const { execution_id } = await workflowApi.execute(selectedWorkflowId)
-      connect(execution_id, selectedWorkflowId)
-      setShowExecution(true)
-      // 连接后自动开始执行
-      setTimeout(() => startExecution(selectedWorkflowId), 500)
-    } catch (error) {
-      console.error('执行工作流失败:', error)
-    }
-  }, [selectedWorkflowId, connect, startExecution])
+  const handleSaveWorkflow = useCallback(
+    async (workflow: typeof currentWorkflow) => {
+      if (!workflow) return
+      try {
+        await saveWorkflow(workflow)
+        toast.success('保存成功')
+      } catch (error) {
+        handleError(error, '保存工作流失败')
+      }
+    },
+    [saveWorkflow, handleError]
+  )
 
   return (
     <div className="h-screen flex flex-col bg-gray-100">
-      {/* 顶部导航 */}
-      <header className="h-12 bg-white border-b flex items-center justify-between px-4 shrink-0">
-        <h1 className="font-bold text-lg">SchemaFlow</h1>
-        <div className="flex items-center gap-4">
-          {currentWorkflow && (
-            <>
-              <span className="text-sm text-gray-600">{currentWorkflow.name}</span>
-              {hasCachedCredentials && (
-                <span
-                  className="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded"
-                  title="已缓存登录凭证，下次执行将自动使用"
-                >
-                  已登录
-                </span>
-              )}
-              <button
-                onClick={handleExecute}
-                className="px-4 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600"
-              >
-                ▶ 执行
-              </button>
-              <button
-                onClick={() => setShowExecution(!showExecution)}
-                className={`px-3 py-1 text-sm rounded border ${
-                  showExecution
-                    ? 'bg-gray-200 border-gray-400'
-                    : 'bg-white border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                {showExecution ? '隐藏监控' : '显示监控'}
-              </button>
-            </>
-          )}
-        </div>
-      </header>
+      <Toast />
+      <ConfirmDialog />
+      <Header
+        onExecute={handleExecute}
+        onStop={stopExecution}
+        onTogglePanel={() => setShowPanel(!showPanel)}
+        showPanel={showPanel}
+        onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+        sidebarCollapsed={sidebarCollapsed}
+      />
 
-      {/* 主内容区 */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* 左侧工作流列表 */}
-        <aside className="w-56 bg-white border-r shrink-0">
-          <WorkflowList
-            selectedId={selectedWorkflowId}
-            onSelect={handleSelectWorkflow}
-            onCreate={handleCreateWorkflow}
-          />
+      <div className="flex-1 flex overflow-hidden relative">
+        <aside
+          className={`bg-white border-r border-gray-200 shrink-0 transition-all duration-300 ease-in-out ${
+            sidebarCollapsed ? 'w-14' : 'w-56'
+          }`}
+        >
+          {!sidebarCollapsed && (
+            <WorkflowList
+              selectedId={selectedId}
+              onSelect={handleSelectWorkflow}
+              onCreate={handleCreateWorkflow}
+            />
+          )}
+          {sidebarCollapsed && (
+            <div className="h-full flex items-center justify-center border-r border-gray-200">
+              <button
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="p-2 hover:bg-gray-100 rounded"
+                title="展开"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            </div>
+          )}
         </aside>
 
-        {/* 中间编辑器 */}
-        <main className="flex-1 overflow-hidden">
+        <main className="flex-1 overflow-hidden min-w-0">
           {currentWorkflow ? (
-            <FlowEditor
-              workflow={currentWorkflow}
-              nodeStatuses={executionState.nodeStatuses}
-              onSave={handleSaveWorkflow}
-            />
+            <ErrorBoundary>
+              <FlowEditor
+                workflow={currentWorkflow}
+                nodeStatuses={executionState.nodeStatuses}
+                onSave={handleSaveWorkflow}
+              />
+            </ErrorBoundary>
           ) : (
-            <div className="h-full flex items-center justify-center text-gray-500">
-              <div className="text-center">
-                <p className="text-lg mb-2">选择或创建一个工作流开始</p>
-                <button
-                  onClick={handleCreateWorkflow}
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                >
-                  创建工作流
-                </button>
-              </div>
-            </div>
+            <EmptyState
+              icon={Rocket}
+              title="开始使用 SchemaFlow"
+              description="选择一个现有工作流或创建新的工作流"
+              action={{ label: '创建工作流', onClick: handleCreateWorkflow }}
+            />
           )}
         </main>
 
-        {/* 右侧执行面板 */}
-        {showExecution && (
-          <aside className="w-96 border-l shrink-0">
-            <ExecutionPanel
-              executionState={executionState}
-              isConnected={isConnected}
-              onStart={startExecution}
-              onStop={stopExecution}
-              onUserInputResponse={respondUserInput}
-            />
+        {showPanel && (
+          <aside className="w-96 border-l border-gray-200 shrink-0 bg-white shadow-sm">
+            <ExecutionPanel />
           </aside>
         )}
       </div>

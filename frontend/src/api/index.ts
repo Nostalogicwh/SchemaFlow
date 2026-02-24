@@ -2,7 +2,7 @@
  * API 封装层
  */
 import axios from 'axios'
-import type { Workflow, WorkflowListItem, ActionMetadata } from '@/types/workflow'
+import type { Workflow, WorkflowListItem, ActionMetadata, ExecutionRecord, WorkflowNode, WorkflowEdge } from '@/types/workflow'
 
 // axios 实例
 const api = axios.create({
@@ -54,6 +54,12 @@ export const workflowApi = {
   stop: async (executionId: string): Promise<void> => {
     await api.post(`/executions/${executionId}/stop`)
   },
+
+  // 获取最近一次执行记录
+  getLastExecution: async (id: string): Promise<{ execution: ExecutionRecord | null }> => {
+    const { data } = await api.get(`/workflows/${id}/last-execution`)
+    return data
+  },
 }
 
 // 节点 API
@@ -65,11 +71,11 @@ export const actionApi = {
   },
 }
 
-// AI 生成 API（预留）
+// AI 编排 API
 export const aiApi = {
-  // 生成工作流
-  generate: async (prompt: string): Promise<Workflow> => {
-    const { data } = await api.post('/ai/generate', { prompt })
+  // 根据自然语言描述生成工作流节点和连线
+  generateWorkflow: async (prompt: string): Promise<{ nodes: WorkflowNode[]; edges: WorkflowEdge[] }> => {
+    const { data } = await api.post('/ai/generate-workflow', { prompt }, { timeout: 600000 })
     return data
   },
 }

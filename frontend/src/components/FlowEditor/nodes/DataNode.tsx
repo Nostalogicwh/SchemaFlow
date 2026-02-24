@@ -3,14 +3,7 @@
  */
 import { memo } from 'react'
 import { BaseNode, type BaseNodeData } from './BaseNode'
-
-// 数据操作图标
-const dataIcons: Record<string, string> = {
-  extract_text: '📝',
-  copy_to_clipboard: '📋',
-  paste_from_clipboard: '📄',
-  set_variable: '💾',
-}
+import { dataIcons } from '@/constants/nodeStyles'
 
 interface DataNodeProps {
   data: BaseNodeData

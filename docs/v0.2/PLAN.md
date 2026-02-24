@@ -160,3 +160,27 @@ API 和 WS 协议增加 `mode` 参数：`headless`（后台）/ `headed`（前�
 | P5 | 问题 6b：自然语言编排 | P4 |
 
 按 P0 → P1 → P2 → P3 → P4 → P5 顺序执行，每阶段完成后运行提交前验证。
+
+---
+
+## 实施进度
+
+分支：`dev/v0.2`，基于 `main` 创建。
+
+| 阶段 | 状态 | 提交 | 说明 |
+|---|---|---|---|
+| P0 | ✅ 完成 | `ed69d56` | `backend/setup.sh`、`start.sh` 创建完成 |
+| P1 | ✅ 完成 | `397754d` | `executor.py` 改为 CDP 优先连接，降级启动独立浏览器；`_cleanup()` 区分 CDP/独立模式 |
+| P2 | ✅ 完成 | `0b78545` | 后端 `execute()` 增加 `headless` 参数，WS `start_execution` 携带 `mode`，前端增加模式切换下拉框 |
+| P3 | ✅ 完成 | `2c3e2c7` | 新建 `backend/repository/`（抽象基类 + JSON 实现），`NodeExecutionRecord` dataclass，executor 执行后持久化到 `data/db/executions/`，新增 `GET /api/workflows/{id}/last-execution`，前端 ExecutionPanel 增加 Tab 切换（截图/节点记录/日志） |
+| P4 | ✅ 完成 | `7ab08c5` | 删除 `ai.py`、`AINode.tsx`，清理 `nodeTypes`/`nodeCategoryMap`/`NodeCategory` 中的 ai 引用，更新 CLAUDE.md 验证脚本 |
+| P5 | ✅ 完成 | `43aff98` | 新建 `backend/api/ai_generate.py`（`POST /api/ai/generate-workflow`），registry 增加 `get_all_schemas()`，Toolbar 增加 AI 编排输入框，FlowEditor 接收生成结果渲染到画布 |
+
+### 待验证事项（明天检查）
+
+1. 启动带 `--remote-debugging-port=9222` 的 Chrome，执行工作流，确认 CDP 连接成功且登录态保留
+2. 切换后台/前台模式执行，确认行为符合预期
+3. 执行完成后检查 `data/db/executions/` 下 JSON 文件生成且内容完整
+4. 刷新页面选中工作流，确认 ExecutionPanel 能展示上次执行记录
+5. 配置 `LLM_API_KEY` 和 `LLM_BASE_URL` 环境变量，测试 AI 编排输入框生成工作流
+6. `bash backend/setup.sh` 在干净环境下能正常初始化 venv

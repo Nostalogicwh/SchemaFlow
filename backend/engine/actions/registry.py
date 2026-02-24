@@ -1,18 +1,29 @@
 """动作注册表 - 管理所有工作流节点。"""
-from typing import Dict, Callable, Any, List
+
+from typing import Dict, Callable, Any, List, Optional
 from pydantic import BaseModel
+
+
+# AI干预配置参数Schema
+AI_INTERVENTION_SCHEMA = {
+    "enable_ai_intervention": {
+        "type": "boolean",
+        "description": "启用AI自动干预检测（如登录、验证码、弹窗等）",
+        "default": False,
+    }
+}
 
 
 class ActionMetadata(BaseModel):
     """节点元数据模型。"""
 
-    name: str                    # 节点唯一标识
-    label: str                   # 前端显示标签
-    description: str             # 功能描述
-    category: str                # 分类: browser, data, control, ai, base
-    parameters: Dict[str, Any]   # JSON Schema 定义参数
-    inputs: List[str] = []      # 输入端口定义
-    outputs: List[str] = []     # 输出端口定义
+    name: str  # 节点唯一标识
+    label: str  # 前端显示标签
+    description: str  # 功能描述
+    category: str  # 分类: browser, data, control, ai, base
+    parameters: Dict[str, Any]  # JSON Schema 定义参数
+    inputs: List[str] = []  # 输入端口定义
+    outputs: List[str] = []  # 输出端口定义
 
 
 class ActionRegistry:
@@ -32,12 +43,9 @@ class ActionRegistry:
             metadata: 节点元数据
             execute_func: 执行函数
         """
-        self._actions[metadata.name] = {
-            "metadata": metadata,
-            "execute": execute_func
-        }
+        self._actions[metadata.name] = {"metadata": metadata, "execute": execute_func}
 
-    def get(self, name: str) -> Dict[str, Any] | None:
+    def get(self, name: str) -> Optional[Dict[str, Any]]:
         """获取动作定义。
 
         Args:
@@ -55,6 +63,24 @@ class ActionRegistry:
             元数据列表
         """
         return [action["metadata"].model_dump() for action in self._actions.values()]
+
+    def get_all_schemas(self) -> List[Dict[str, Any]]:
+        """导出所有 action 的精简 schema（供 LLM 生成工作流使用）。
+
+        Returns:
+            包含 name、label、description、category、parameters 的列表
+        """
+        return [
+            {
+                "name": action["metadata"].name,
+                "label": action["metadata"].label,
+                "description": action["metadata"].description,
+                "category": action["metadata"].category,
+                "parameters": action["metadata"].parameters,
+            }
+            for action in self._actions.values()
+            if action["metadata"].category != "base"  # 排除 start/end
+        ]
 
     def get_execute_func(self, name: str) -> Callable:
         """获取执行函数。
@@ -85,7 +111,8 @@ def register_action(
     category: str,
     parameters: Dict[str, Any],
     inputs: List[str] = None,
-    outputs: List[str] = None
+    outputs: List[str] = None,
+    disable_ai_intervention: bool = False,
 ):
     """动作注册装饰器。
 
@@ -97,10 +124,27 @@ def register_action(
         parameters: 参数 JSON Schema
         inputs: 输入端口定义
         outputs: 输出端口定义
+        disable_ai_intervention: 是否禁用AI干预配置（start/end节点使用）
 
     Returns:
         装饰器函数
     """
+    # 为参数Schema添加AI干预配置（除了base分类的start/end节点）
+    if not disable_ai_intervention:
+        # 获取原有属性
+        original_properties = parameters.get("properties", {}).copy()
+        original_required = parameters.get("required", []).copy()
+
+        # 合并AI干预参数
+        merged_properties = {**AI_INTERVENTION_SCHEMA, **original_properties}
+
+        # 创建新的parameters
+        parameters = {
+            "type": "object",
+            "properties": merged_properties,
+            "required": original_required,
+        }
+
     metadata = ActionMetadata(
         name=name,
         label=label,
@@ -108,7 +152,7 @@ def register_action(
         category=category,
         parameters=parameters,
         inputs=inputs or [],
-        outputs=outputs or []
+        outputs=outputs or [],
     )
 
     def decorator(func):

@@ -3,13 +3,7 @@
  */
 import { memo } from 'react'
 import { BaseNode, type BaseNodeData } from './BaseNode'
-
-// 控制节点图标
-const controlIcons: Record<string, string> = {
-  wait: '⏱️',
-  wait_for_element: '👁️',
-  user_input: '🙋',
-}
+import { controlIcons } from '@/constants/nodeStyles'
 
 interface ControlNodeProps {
   data: BaseNodeData
