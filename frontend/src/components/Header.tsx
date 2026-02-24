@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react'
 import { useWorkflowStore } from '@/stores/workflowStore'
 import { useExecutionStore } from '@/stores/executionStore'
 import { toast } from '@/stores/uiStore'
-import { credentialStore } from '@/services/credentialStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import type { Workflow } from '@/types/workflow'
@@ -13,9 +12,7 @@ import {
   PanelRight, 
   Menu,
   Workflow as WorkflowIcon,
-  Info,
-  Shield,
-  Trash2
+  Info
 } from 'lucide-react'
 
 type ExecutionStatus = 'idle' | 'running' | 'success' | 'error'
@@ -301,7 +298,6 @@ function ExecutionModeToggle({
         {currentWorkflow && (
           <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-neutral-200">
             <EditableWorkflowName workflow={currentWorkflow} />
-            <CredentialStatus workflowId={currentWorkflow.id} />
           </div>
         )}
       </div>
