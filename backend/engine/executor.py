@@ -236,6 +236,9 @@ class WorkflowExecutor:
                     )
 
                 # 检查是否有 AI 定位返回的新选择器，发送回填消息
+                logger.info(
+                    f"[{context.execution_id}] 节点 {node_id} 结果检查: result={result}, type={type(result)}"
+                )
                 if (
                     result
                     and isinstance(result, dict)
@@ -243,6 +246,9 @@ class WorkflowExecutor:
                 ):
                     effective_selector = result["effective_selector"]
                     original_selector = config.get("selector")
+                    logger.info(
+                        f"[{context.execution_id}] 发现 effective_selector: {effective_selector}, original: {original_selector}"
+                    )
                     if effective_selector != original_selector:
                         logger.info(
                             f"[{context.execution_id}] 选择器回填: {node_id} -> {effective_selector}"
@@ -256,10 +262,19 @@ class WorkflowExecutor:
                                         "selector": effective_selector,
                                     }
                                 )
+                                logger.info(
+                                    f"[{context.execution_id}] 已发送 selector_update 消息"
+                                )
                             except Exception as e:
                                 logger.warning(
                                     f"[{context.execution_id}] 发送选择器更新消息失败: {e}"
                                 )
+                    else:
+                        logger.info(f"[{context.execution_id}] 选择器未变化，跳过回填")
+                else:
+                    logger.info(
+                        f"[{context.execution_id}] 节点 {node_id} 无 effective_selector"
+                    )
 
                 await context.send_screenshot()
 
