@@ -149,6 +149,21 @@ async def click_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     selector = config.get("selector")
     ai_target = config.get("ai_target")
 
+    # Debug: log config contents
+    from pathlib import Path
+    from datetime import datetime
+
+    try:
+        log_file = Path(__file__).parent.parent.parent / "data" / "action_debug.log"
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.now().isoformat()}] click_action config: {config}\n")
+            f.write(
+                f"[{datetime.now().isoformat()}] selector={selector!r}, ai_target={ai_target!r}\n"
+            )
+    except Exception:
+        pass
+
     if not selector and not ai_target:
         raise ValueError("click 节点需要 selector 或 ai_target 参数")
 
@@ -222,6 +237,23 @@ async def input_text_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
     selector = config.get("selector")
     ai_target = config.get("ai_target")
     value = config.get("value", "")
+
+    # Debug: log config contents
+    from pathlib import Path
+    from datetime import datetime
+
+    try:
+        log_file = Path(__file__).parent.parent.parent / "data" / "action_debug.log"
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(
+                f"[{datetime.now().isoformat()}] input_text_action config: {config}\n"
+            )
+            f.write(
+                f"[{datetime.now().isoformat()}] selector={selector!r}, ai_target={ai_target!r}\n"
+            )
+    except Exception:
+        pass
     clear_before = config.get("clear_before", True)
     press_enter = config.get("press_enter", False)
 
