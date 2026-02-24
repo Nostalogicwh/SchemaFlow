@@ -1,7 +1,9 @@
 """浏览器操作节点。"""
+
 import base64
 from typing import Dict, Any
 from ..actions import register_action
+from ..ai.locator import locate_element
 
 
 @register_action(
@@ -11,16 +13,11 @@ from ..actions import register_action
     category="browser",
     parameters={
         "type": "object",
-        "properties": {
-            "url": {
-                "type": "string",
-                "description": "要打开的 URL"
-            }
-        },
-        "required": ["url"]
+        "properties": {"url": {"type": "string", "description": "要打开的 URL"}},
+        "required": ["url"],
     },
     inputs=["flow"],
-    outputs=["flow"]
+    outputs=["flow"],
 )
 async def open_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """打开新标签页。
@@ -53,16 +50,11 @@ async def open_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
     category="browser",
     parameters={
         "type": "object",
-        "properties": {
-            "url": {
-                "type": "string",
-                "description": "要跳转的 URL"
-            }
-        },
-        "required": ["url"]
+        "properties": {"url": {"type": "string", "description": "要跳转的 URL"}},
+        "required": ["url"],
     },
     inputs=["flow"],
-    outputs=["flow"]
+    outputs=["flow"],
 )
 async def navigate_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """页面跳转。
@@ -91,19 +83,16 @@ async def navigate_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
     parameters={
         "type": "object",
         "properties": {
-            "selector": {
-                "type": "string",
-                "description": "CSS 选择器"
-            },
+            "selector": {"type": "string", "description": "CSS 选择器"},
             "ai_target": {
                 "type": "string",
-                "description": "AI 定位目标描述（当 selector 不存在时使用）"
-            }
+                "description": "AI 定位目标描述（当 selector 不存在时使用）",
+            },
         },
-        "required": []
+        "required": [],
     },
     inputs=["flow"],
-    outputs=["flow"]
+    outputs=["flow"],
 )
 async def click_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """点击元素。
@@ -113,24 +102,29 @@ async def click_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
         config: 节点配置，包含 selector 或 ai_target
 
     Returns:
-        执行结果
+        执行结果，包含 effective_selector（如果 AI 定位成功）
     """
     selector = config.get("selector")
     ai_target = config.get("ai_target")
 
-    if selector:
-        await context.log("info", f"点击元素: {selector}")
-        await context.page.click(selector, timeout=30000)
-    elif ai_target:
-        await context.log("info", f"AI 点击: {ai_target}")
-        # 使用 Browser Use 的 AI 定位
-        # 这里简化处理，实际需要集成 Browser Use
-        # result = await context.ai_click(ai_target)
-        raise NotImplementedError("ai_target 需要集成 Browser Use")
-    else:
+    if not selector and not ai_target:
         raise ValueError("click 节点需要 selector 或 ai_target 参数")
 
-    return {}
+    # 使用混合定位器定位元素
+    locator, effective_selector = await locate_element(
+        context.page, selector=selector, ai_target=ai_target, context=context
+    )
+
+    await context.log("info", f"点击元素: {effective_selector or selector}")
+    await locator.click(timeout=30000)
+
+    # 如果 AI 定位返回了新的选择器，返回给 executor 用于回填
+    result = {}
+    if effective_selector and effective_selector != selector:
+        result["effective_selector"] = effective_selector
+        await context.log("info", f"AI 定位成功，新选择器: {effective_selector}")
+
+    return result
 
 
 @register_action(
@@ -141,29 +135,23 @@ async def click_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     parameters={
         "type": "object",
         "properties": {
-            "selector": {
-                "type": "string",
-                "description": "CSS 选择器"
-            },
-            "value": {
-                "type": "string",
-                "description": "要输入的文本"
-            },
+            "selector": {"type": "string", "description": "CSS 选择器"},
+            "value": {"type": "string", "description": "要输入的文本"},
             "clear_before": {
                 "type": "boolean",
                 "description": "输入前是否清空",
-                "default": True
+                "default": True,
             },
             "press_enter": {
                 "type": "boolean",
                 "description": "输入后是否按回车",
-                "default": False
-            }
+                "default": False,
+            },
         },
-        "required": ["value"]
+        "required": ["value"],
     },
     inputs=["flow"],
-    outputs=["flow"]
+    outputs=["flow"],
 )
 async def input_text_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """输入文本。
@@ -173,26 +161,40 @@ async def input_text_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
         config: 节点配置
 
     Returns:
-        执行结果
+        执行结果，包含 effective_selector（如果 AI 定位成功）
     """
     selector = config.get("selector")
+    ai_target = config.get("ai_target")
     value = config.get("value", "")
     clear_before = config.get("clear_before", True)
     press_enter = config.get("press_enter", False)
 
-    if not selector:
-        raise ValueError("input_text 节点需要 selector 参数")
+    if not selector and not ai_target:
+        raise ValueError("input_text 节点需要 selector 或 ai_target 参数")
 
-    await context.log("info", f"输入文本到 {selector}: {value[:50]}...")
+    # 使用混合定位器定位元素
+    locator, effective_selector = await locate_element(
+        context.page, selector=selector, ai_target=ai_target, context=context
+    )
+
+    await context.log(
+        "info", f"输入文本到 {effective_selector or selector}: {value[:50]}..."
+    )
 
     if clear_before:
-        await context.page.fill(selector, "")
-    await context.page.type(selector, value)
+        await locator.fill("")
+    await locator.type(value)
 
     if press_enter:
         await context.page.keyboard.press("Enter")
 
-    return {"value": value}
+    # 如果 AI 定位返回了新的选择器，返回给 executor 用于回填
+    result = {"value": value}
+    if effective_selector and effective_selector != selector:
+        result["effective_selector"] = effective_selector
+        await context.log("info", f"AI 定位成功，新选择器: {effective_selector}")
+
+    return result
 
 
 @register_action(
@@ -203,15 +205,12 @@ async def input_text_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
     parameters={
         "type": "object",
         "properties": {
-            "filename": {
-                "type": "string",
-                "description": "保存的文件名（可选）"
-            }
+            "filename": {"type": "string", "description": "保存的文件名（可选）"}
         },
-        "required": []
+        "required": [],
     },
     inputs=["flow"],
-    outputs=["flow"]
+    outputs=["flow"],
 )
 async def screenshot_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """截图。
@@ -232,6 +231,7 @@ async def screenshot_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
     # 如果有 filename，保存到文件
     if filename:
         import os
+
         save_dir = context.data_dir / "screenshots"
         save_dir.mkdir(parents=True, exist_ok=True)
         filepath = save_dir / filename

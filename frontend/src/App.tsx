@@ -1,7 +1,7 @@
 /**
  * SchemaFlow 主应用
  */
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { FlowEditor } from '@/components/FlowEditor'
 import { WorkflowList } from '@/components/WorkflowList'
 import { ExecutionPanel } from '@/components/ExecutionPanel'
@@ -9,10 +9,43 @@ import { useWebSocket } from '@/hooks/useWebSocket'
 import { workflowApi } from '@/api'
 import type { Workflow } from '@/types/workflow'
 
+// 从 localStorage 检查凭证状态
+const checkCredentialStatus = (workflowId: string): boolean => {
+  try {
+    const key = `workflow_creds_${workflowId}`
+    const data = localStorage.getItem(key)
+    if (data) {
+      const parsed = JSON.parse(data)
+      return !!(parsed.cookies?.length > 0)
+    }
+  } catch {
+    // 忽略错误
+  }
+  return false
+}
+
 function App() {
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null)
   const [currentWorkflow, setCurrentWorkflow] = useState<Workflow | null>(null)
   const [showExecution, setShowExecution] = useState(false)
+  const [hasCachedCredentials, setHasCachedCredentials] = useState(false)
+
+  // 更新工作流节点配置（用于 AI 定位回填选择器）
+  const handleUpdateNodeConfig = useCallback((nodeId: string, config: Record<string, unknown>) => {
+    if (!currentWorkflow) return
+
+    const updatedWorkflow: Workflow = {
+      ...currentWorkflow,
+      nodes: currentWorkflow.nodes.map(node =>
+        node.id === nodeId
+          ? { ...node, config: { ...node.config, ...config } }
+          : node
+      )
+    }
+
+    setCurrentWorkflow(updatedWorkflow)
+    console.log(`[App] 节点 ${nodeId} 配置已更新:`, config)
+  }, [currentWorkflow])
 
   const {
     isConnected,
@@ -22,7 +55,9 @@ function App() {
     stopExecution,
     respondUserInput,
     reset,
-  } = useWebSocket()
+  } = useWebSocket({
+    onSelectorUpdate: handleUpdateNodeConfig
+  })
 
   // 选择工作流
   const handleSelectWorkflow = useCallback(async (id: string) => {
@@ -30,6 +65,7 @@ function App() {
       const workflow = await workflowApi.get(id)
       setSelectedWorkflowId(id)
       setCurrentWorkflow(workflow)
+      setHasCachedCredentials(checkCredentialStatus(id))
       reset()
     } catch (error) {
       console.error('加载工作流失败:', error)
@@ -94,6 +130,14 @@ function App() {
           {currentWorkflow && (
             <>
               <span className="text-sm text-gray-600">{currentWorkflow.name}</span>
+              {hasCachedCredentials && (
+                <span
+                  className="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded"
+                  title="已缓存登录凭证，下次执行将自动使用"
+                >
+                  已登录
+                </span>
+              )}
               <button
                 onClick={handleExecute}
                 className="px-4 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600"

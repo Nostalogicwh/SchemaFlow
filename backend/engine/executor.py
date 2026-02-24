@@ -1,4 +1,5 @@
 """工作流执行器 - 负责工作流的解析和执行。"""
+
 import asyncio
 import re
 import uuid
@@ -72,7 +73,7 @@ class WorkflowExecutor:
         workflow: Dict[str, Any],
         websocket=None,
         browser=None,
-        execution_id: str = None
+        execution_id: str = None,
     ) -> ExecutionContext:
         """执行工作流。
 
@@ -92,7 +93,7 @@ class WorkflowExecutor:
             workflow_id=workflow["id"],
             browser=browser,
             websocket=websocket,
-            data_dir=self.data_dir
+            data_dir=self.data_dir,
         )
 
         async with self._lock:
@@ -108,11 +109,13 @@ class WorkflowExecutor:
             # 发送错误消息
             if context.websocket:
                 try:
-                    await context.websocket.send_json({
-                        "type": "error",
-                        "node_id": context.current_node_id,
-                        "message": str(e)
-                    })
+                    await context.websocket.send_json(
+                        {
+                            "type": "error",
+                            "node_id": context.current_node_id,
+                            "message": str(e),
+                        }
+                    )
                 except Exception:
                     pass
         finally:
@@ -133,6 +136,7 @@ class WorkflowExecutor:
         # 初始化浏览器
         if context.browser is None and context.page is None:
             from playwright.async_api import async_playwright
+
             self.playwright = await async_playwright().start()
             context.browser = await self.playwright.chromium.launch(
                 headless=False  # 有头模式，用户可见
@@ -143,19 +147,23 @@ class WorkflowExecutor:
             context.page = await context.browser.new_page()
 
         # 计算执行顺序
-        execution_order = topological_sort(workflow.get("nodes", []), workflow.get("edges", []))
+        execution_order = topological_sort(
+            workflow.get("nodes", []), workflow.get("edges", [])
+        )
 
         # 构建节点查找表
         nodes_map = {node["id"]: node for node in workflow.get("nodes", [])}
 
         # 发送开始消息
         if context.websocket:
-            await context.websocket.send_json({
-                "type": "execution_started",
-                "execution_id": context.execution_id,
-                "workflow_id": context.workflow_id,
-                "node_order": execution_order
-            })
+            await context.websocket.send_json(
+                {
+                    "type": "execution_started",
+                    "execution_id": context.execution_id,
+                    "workflow_id": context.workflow_id,
+                    "node_order": execution_order,
+                }
+            )
 
         # 按顺序执行节点
         for node_id in execution_order:
@@ -174,11 +182,9 @@ class WorkflowExecutor:
 
             # 发送节点开始消息
             if context.websocket:
-                await context.websocket.send_json({
-                    "type": "node_start",
-                    "node_id": node_id,
-                    "node_type": node_type
-                })
+                await context.websocket.send_json(
+                    {"type": "node_start", "node_id": node_id, "node_type": node_type}
+                )
 
             # 获取执行函数
             try:
@@ -195,12 +201,40 @@ class WorkflowExecutor:
 
                 # 发送节点完成消息
                 if context.websocket:
-                    await context.websocket.send_json({
-                        "type": "node_complete",
-                        "node_id": node_id,
-                        "success": True,
-                        "result": result
-                    })
+                    await context.websocket.send_json(
+                        {
+                            "type": "node_complete",
+                            "node_id": node_id,
+                            "success": True,
+                            "result": result,
+                        }
+                    )
+
+                # 检查是否有 AI 定位返回的新选择器，发送回填消息
+                if (
+                    result
+                    and isinstance(result, dict)
+                    and result.get("effective_selector")
+                ):
+                    effective_selector = result["effective_selector"]
+                    original_selector = config.get("selector")
+                    if effective_selector != original_selector:
+                        await context.log(
+                            "info", f"选择器回填: {node_id} -> {effective_selector}"
+                        )
+                        if context.websocket:
+                            try:
+                                await context.websocket.send_json(
+                                    {
+                                        "type": "selector_update",
+                                        "node_id": node_id,
+                                        "selector": effective_selector,
+                                    }
+                                )
+                            except Exception as e:
+                                await context.log(
+                                    "warn", f"发送选择器更新消息失败: {e}"
+                                )
 
                 # 每个节点后发送截图
                 await context.send_screenshot()
@@ -208,12 +242,14 @@ class WorkflowExecutor:
             except Exception as e:
                 # 发送节点失败消息
                 if context.websocket:
-                    await context.websocket.send_json({
-                        "type": "node_complete",
-                        "node_id": node_id,
-                        "success": False,
-                        "error": str(e)
-                    })
+                    await context.websocket.send_json(
+                        {
+                            "type": "node_complete",
+                            "node_id": node_id,
+                            "success": False,
+                            "error": str(e),
+                        }
+                    )
                 await context.log("error", f"节点 {node_id} 执行失败: {str(e)}")
                 raise
 
@@ -222,13 +258,17 @@ class WorkflowExecutor:
 
         # 发送完成消息
         if context.websocket:
-            await context.websocket.send_json({
-                "type": "execution_complete",
-                "execution_id": context.execution_id,
-                "success": context.status == ExecutionStatus.COMPLETED,
-                "duration": (context.end_time - context.start_time).total_seconds() if context.end_time else 0,
-                "logs": context.logs
-            })
+            await context.websocket.send_json(
+                {
+                    "type": "execution_complete",
+                    "execution_id": context.execution_id,
+                    "success": context.status == ExecutionStatus.COMPLETED,
+                    "duration": (context.end_time - context.start_time).total_seconds()
+                    if context.end_time
+                    else 0,
+                    "logs": context.logs,
+                }
+            )
 
     def _resolve_variables(self, config: Any, variables: Dict[str, Any]) -> Any:
         """解析变量引用 {{variable_name}}。
@@ -240,10 +280,11 @@ class WorkflowExecutor:
         Returns:
             解析后的配置
         """
+
         def resolve_value(value):
             if isinstance(value, str):
                 # 替换 {{var}} 语法
-                pattern = r'\{\{(\w+)\}\}'
+                pattern = r"\{\{(\w+)\}\}"
                 matches = list(re.finditer(pattern, value))
 
                 if matches:
@@ -251,7 +292,9 @@ class WorkflowExecutor:
                     for match in reversed(matches):
                         var_name = match.group(1)
                         var_value = str(variables.get(var_name, match.group(0)))
-                        result = result[:match.start()] + var_value + result[match.end():]
+                        result = (
+                            result[: match.start()] + var_value + result[match.end() :]
+                        )
                     return result
                 return value
             elif isinstance(value, dict):
@@ -271,7 +314,7 @@ class WorkflowExecutor:
         context.end_time = datetime.now()
 
         # 关闭浏览器（如果是由执行器创建的）
-        if hasattr(self, 'playwright'):
+        if hasattr(self, "playwright"):
             try:
                 await self.playwright.stop()
             except Exception:
@@ -294,10 +337,12 @@ class WorkflowExecutor:
                 context.status = ExecutionStatus.CANCELLED
                 if context.websocket:
                     try:
-                        await context.websocket.send_json({
-                            "type": "execution_cancelled",
-                            "execution_id": execution_id
-                        })
+                        await context.websocket.send_json(
+                            {
+                                "type": "execution_cancelled",
+                                "execution_id": execution_id,
+                            }
+                        )
                     except Exception:
                         pass
 

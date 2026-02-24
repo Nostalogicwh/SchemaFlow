@@ -85,6 +85,7 @@ export type WSMessageType =
   | 'execution_complete'
   | 'error'
   | 'log'
+  | 'selector_update'
 
 // WebSocket 消息基础结构
 export interface WSMessage {
@@ -144,6 +145,13 @@ export interface WSLog extends WSMessage {
   level: 'info' | 'warning' | 'error'
   message: string
   timestamp: string
+}
+
+// 选择器更新消息（AI 定位成功后回填）
+export interface WSSelectorUpdate extends WSMessage {
+  type: 'selector_update'
+  node_id: string
+  selector: string
 }
 
 // 执行状态
