@@ -99,7 +99,7 @@ async def wait_for_element_action(
     try:
         # 使用 locate_element 来定位元素（支持 AI 定位）
         # wait_time 作为定位的超时时间，timeout 作为整体节点的最大执行时间
-        await locate_element(
+        locator, effective_selector = await locate_element(
             context.page,
             selector,
             ai_target,
@@ -108,11 +108,17 @@ async def wait_for_element_action(
             timeout=wait_time * 1000,
         )
         await context.log("info", f"元素已出现: {target_desc}")
+        
+        # 如果 AI 定位返回了新的选择器，返回给 executor 用于回填
+        result = {}
+        if effective_selector and effective_selector != selector:
+            result["effective_selector"] = effective_selector
+            await context.log("info", f"AI 定位成功，新选择器: {effective_selector}")
+        return result
+        
     except ValueError as e:
         await context.log("error", f"等待元素失败: {target_desc}, 错误: {str(e)}")
         raise
-
-    return {}
 
 
 @register_action(

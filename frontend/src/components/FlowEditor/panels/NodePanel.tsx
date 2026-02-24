@@ -50,22 +50,11 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdate
     [selectedNode, onUpdateNode]
   )
 
-  // 检查节点是否支持AI定位
-  const supportsAiLocator = metadata?.name === 'wait_for_element' ||
-    metadata?.name === 'browser_click' ||
-    metadata?.name === 'browser_input'
-
-  // 处理保存选择器
-  const handleSaveSelector = useCallback((selector: string) => {
-    if (!selectedNode) return
-    const currentConfig = (selectedNode.data as { config?: Record<string, unknown> }).config || {}
-    onUpdateNode(selectedNode.id, { ...currentConfig, selector })
-  }, [selectedNode, onUpdateNode])
-
-  // 打开调试弹窗
-  const openDebugModal = useCallback(() => {
-    setIsDebugModalOpen(true)
-  }, [])
+  // 检查节点是否支持AI定位（用于显示AI后备开关）
+  const supportsAiFallback = metadata?.name === 'wait_for_element' ||
+    metadata?.name === 'click' ||
+    metadata?.name === 'input_text' ||
+    metadata?.name === 'select_option'
 
   if (!selectedNode) {
     return (
@@ -143,38 +132,9 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdate
           />
         ))}
 
-        {/* AI 定位配置区域 - 仅对支持的节点显示 */}
-        {supportsAiLocator && (
+        {/* AI 后备开关 - 仅对支持的节点显示 */}
+        {supportsAiFallback && (
           <div className="border-t pt-4 mt-4">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-medium text-gray-700">AI 智能定位</h4>
-              <Button
-                onClick={openDebugModal}
-                variant="secondary"
-                size="sm"
-                icon={<Bug className="w-4 h-4" />}
-              >
-                调试定位
-              </Button>
-            </div>
-
-            {/* 已保存的选择器显示 */}
-            <div className="mb-3">
-              <FormField
-                label="已保存的选择器"
-                helpText="调试成功后自动保存，下次优先使用"
-              >
-                <Input
-                  type="text"
-                  value={(currentConfig.selector as string) ?? ''}
-                  onChange={(e) => handleChange('selector', e.target.value || undefined)}
-                  placeholder="未保存选择器，请使用调试功能生成"
-                  readOnly={!currentConfig.selector}
-                />
-              </FormField>
-            </div>
-
-            {/* AI 后备开关 */}
             <div className="flex items-center justify-between">
               <label className="text-sm text-gray-700">
                 当 CSS 选择器失效时启用 AI 定位
@@ -200,18 +160,6 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdate
           </div>
         )}
       </div>
-
-      {/* 调试定位弹窗 */}
-      {supportsAiLocator && (
-        <DebugLocatorModal
-          isOpen={isDebugModalOpen}
-          onClose={() => setIsDebugModalOpen(false)}
-          nodeId={selectedNode?.id || ''}
-          nodeType={selectedNode?.type || ''}
-          onSave={handleSaveSelector}
-          wsConnection={wsConnection || null}
-        />
-      )}
     </div>
   )
 }
