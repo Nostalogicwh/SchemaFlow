@@ -25,7 +25,7 @@ async def locate_element(
         timeout: 超时时间（毫秒）
 
     Returns:
-        Playwright Locator对象
+        (Playwright Locator对象, effective_selector字符串) 元组
 
     Raises:
         ValueError: 无法定位元素时
@@ -70,7 +70,8 @@ async def locate_element(
                 "debug", f"元素已可见: {result.selector} (匹配 {count} 个)"
             )
 
-        return locator
+        # 返回 locator 和 effective_selector
+        return locator, result.selector
 
     except ValueError as e:
         await context.log("error", f"元素定位失败: {str(e)}")

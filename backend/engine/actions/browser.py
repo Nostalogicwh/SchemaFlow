@@ -1,4 +1,5 @@
 """浏览器操作节点。"""
+
 import base64
 from typing import Dict, Any
 from ..actions import register_action
@@ -12,16 +13,11 @@ from .utils import locate_element
     category="browser",
     parameters={
         "type": "object",
-        "properties": {
-            "url": {
-                "type": "string",
-                "description": "要打开的 URL"
-            }
-        },
-        "required": ["url"]
+        "properties": {"url": {"type": "string", "description": "要打开的 URL"}},
+        "required": ["url"],
     },
     inputs=["flow"],
-    outputs=["flow"]
+    outputs=["flow"],
 )
 async def open_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """在当前页面跳转（保持登录态）。
@@ -38,15 +34,17 @@ async def open_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
         raise ValueError("open_tab 节点需要 url 参数")
 
     await context.log("info", f"打开页面: {url}")
-    
+
     # CDP 模式下在当前页面跳转，保持登录态
-    is_cdp = getattr(context, '_is_cdp', False)
-    
+    is_cdp = getattr(context, "_is_cdp", False)
+
     if context.page is None:
         # 如果页面不存在，需要创建（这种情况较少）
         if is_cdp and context.browser:
             # CDP 模式下尝试复用已有页面或在现有 context 中创建新页面
-            default_context = context.browser.contexts[0] if context.browser.contexts else None
+            default_context = (
+                context.browser.contexts[0] if context.browser.contexts else None
+            )
             if default_context and default_context.pages:
                 context.page = default_context.pages[0]
                 await context.log("info", f"复用已有页面: {context.page.url}")
@@ -56,11 +54,13 @@ async def open_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
                 await context.log("info", "在现有 context 中创建新页面（保持登录态）")
             else:
                 context.page = await context.browser.new_page()
-                await context.log("warn", "创建新页面（无现有 context，可能丢失登录态）")
+                await context.log(
+                    "warn", "创建新页面（无现有 context，可能丢失登录态）"
+                )
         else:
             context.page = await context.browser.new_page()
             await context.log("info", "创建新页面")
-    
+
     # 在当前页面跳转
     if is_cdp:
         # CDP 模式使用 networkidle 等待，确保登录态恢复
@@ -68,7 +68,7 @@ async def open_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
         await context.log("info", f"页面跳转完成，当前 URL: {context.page.url}")
     else:
         await context.page.goto(url, wait_until="domcontentloaded")
-    
+
     return {"url": url}
 
 
@@ -79,16 +79,11 @@ async def open_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
     category="browser",
     parameters={
         "type": "object",
-        "properties": {
-            "url": {
-                "type": "string",
-                "description": "要跳转的 URL"
-            }
-        },
-        "required": ["url"]
+        "properties": {"url": {"type": "string", "description": "要跳转的 URL"}},
+        "required": ["url"],
     },
     inputs=["flow"],
-    outputs=["flow"]
+    outputs=["flow"],
 )
 async def navigate_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """页面跳转。
@@ -105,10 +100,10 @@ async def navigate_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
         raise ValueError("navigate 节点需要 url 参数")
 
     await context.log("info", f"跳转到: {url}")
-    
+
     # 检查是否是 CDP 模式（有登录态）
-    is_cdp = getattr(context, '_is_cdp', False)
-    
+    is_cdp = getattr(context, "_is_cdp", False)
+
     if is_cdp:
         # CDP 模式下，确保在现有上下文中跳转，保持登录态
         await context.log("debug", "CDP 模式跳转，保持登录态")
@@ -118,7 +113,7 @@ async def navigate_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
     else:
         # 独立浏览器模式
         await context.page.goto(url, wait_until="domcontentloaded")
-    
+
     return {"url": url}
 
 
@@ -130,19 +125,16 @@ async def navigate_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any
     parameters={
         "type": "object",
         "properties": {
-            "selector": {
-                "type": "string",
-                "description": "CSS 选择器"
-            },
+            "selector": {"type": "string", "description": "CSS 选择器"},
             "ai_target": {
                 "type": "string",
-                "description": "AI 定位目标描述（当 selector 不存在时使用）"
-            }
+                "description": "AI 定位目标描述（当 selector 不存在时使用）",
+            },
         },
-        "required": []
+        "required": [],
     },
     inputs=["flow"],
-    outputs=["flow"]
+    outputs=["flow"],
 )
 async def click_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """点击元素。
@@ -152,10 +144,25 @@ async def click_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
         config: 节点配置，包含 selector 或 ai_target
 
     Returns:
-        执行结果
+        执行结果，包含 effective_selector（如果 AI 定位成功）
     """
     selector = config.get("selector")
     ai_target = config.get("ai_target")
+
+    # Debug: log config contents
+    from pathlib import Path
+    from datetime import datetime
+
+    try:
+        log_file = Path(__file__).parent.parent.parent / "data" / "action_debug.log"
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.now().isoformat()}] click_action config: {config}\n")
+            f.write(
+                f"[{datetime.now().isoformat()}] selector={selector!r}, ai_target={ai_target!r}\n"
+            )
+    except Exception:
+        pass
 
     if not selector and not ai_target:
         raise ValueError("click 节点需要 selector 或 ai_target 参数")
@@ -164,13 +171,13 @@ async def click_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     await context.log("info", f"点击元素: {target_desc}")
 
     try:
-        locator = await locate_element(
-            context.page, 
-            selector, 
-            ai_target, 
+        locator, effective_selector = await locate_element(
+            context.page,
+            selector,
+            ai_target,
             context,
             wait_for_visible=True,
-            timeout=30000
+            timeout=30000,
         )
         await locator.click(timeout=30000)
         await context.log("info", f"点击成功: {target_desc}")
@@ -178,7 +185,13 @@ async def click_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
         await context.log("error", f"点击失败: {target_desc}, 错误: {str(e)}")
         raise
 
-    return {}
+    # 如果 AI 定位返回了新的选择器，返回给 executor 用于回填
+    result = {}
+    if effective_selector and effective_selector != selector:
+        result["effective_selector"] = effective_selector
+        await context.log("info", f"AI 定位成功，新选择器: {effective_selector}")
+
+    return result
 
 
 @register_action(
@@ -189,33 +202,27 @@ async def click_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     parameters={
         "type": "object",
         "properties": {
-            "selector": {
-                "type": "string",
-                "description": "CSS 选择器"
-            },
+            "selector": {"type": "string", "description": "CSS 选择器"},
             "ai_target": {
                 "type": "string",
-                "description": "AI 定位目标描述（当 selector 不存在时使用）"
+                "description": "AI 定位目标描述（当 selector 不存在时使用）",
             },
-            "value": {
-                "type": "string",
-                "description": "要输入的文本"
-            },
+            "value": {"type": "string", "description": "要输入的文本"},
             "clear_before": {
                 "type": "boolean",
                 "description": "输入前是否清空",
-                "default": True
+                "default": True,
             },
             "press_enter": {
                 "type": "boolean",
                 "description": "输入后是否按回车",
-                "default": False
-            }
+                "default": False,
+            },
         },
-        "required": ["value"]
+        "required": ["value"],
     },
     inputs=["flow"],
-    outputs=["flow"]
+    outputs=["flow"],
 )
 async def input_text_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """输入文本。
@@ -225,11 +232,28 @@ async def input_text_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
         config: 节点配置
 
     Returns:
-        执行结果
+        执行结果，包含 effective_selector（如果 AI 定位成功）
     """
     selector = config.get("selector")
     ai_target = config.get("ai_target")
     value = config.get("value", "")
+
+    # Debug: log config contents
+    from pathlib import Path
+    from datetime import datetime
+
+    try:
+        log_file = Path(__file__).parent.parent.parent / "data" / "action_debug.log"
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(
+                f"[{datetime.now().isoformat()}] input_text_action config: {config}\n"
+            )
+            f.write(
+                f"[{datetime.now().isoformat()}] selector={selector!r}, ai_target={ai_target!r}\n"
+            )
+    except Exception:
+        pass
     clear_before = config.get("clear_before", True)
     press_enter = config.get("press_enter", False)
 
@@ -240,31 +264,37 @@ async def input_text_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
     await context.log("info", f"输入文本到 {target_desc}: {value[:50]}...")
 
     try:
-        locator = await locate_element(
+        locator, effective_selector = await locate_element(
             context.page,
             selector,
             ai_target,
             context,
             wait_for_visible=True,
-            timeout=30000
+            timeout=30000,
         )
-        
+
         # 等待元素可交互
         await locator.wait_for(state="visible", timeout=5000)
-        
+
         if clear_before:
             await locator.fill("")
         await locator.type(value)
 
         if press_enter:
             await context.page.keyboard.press("Enter")
-            
+
         await context.log("info", f"输入成功: {target_desc}")
     except ValueError as e:
         await context.log("error", f"输入失败: {target_desc}, 错误: {str(e)}")
         raise
 
-    return {"value": value}
+    # 如果 AI 定位返回了新的选择器，返回给 executor 用于回填
+    result = {"value": value}
+    if effective_selector and effective_selector != selector:
+        result["effective_selector"] = effective_selector
+        await context.log("info", f"AI 定位成功，新选择器: {effective_selector}")
+
+    return result
 
 
 @register_action(
@@ -275,15 +305,12 @@ async def input_text_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
     parameters={
         "type": "object",
         "properties": {
-            "filename": {
-                "type": "string",
-                "description": "保存的文件名（可选）"
-            }
+            "filename": {"type": "string", "description": "保存的文件名（可选）"}
         },
-        "required": []
+        "required": [],
     },
     inputs=["flow"],
-    outputs=["flow"]
+    outputs=["flow"],
 )
 async def screenshot_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """截图。
@@ -303,6 +330,7 @@ async def screenshot_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
 
     if filename:
         import os
+
         save_dir = context.data_dir / "screenshots"
         save_dir.mkdir(parents=True, exist_ok=True)
         filepath = save_dir / filename
@@ -322,16 +350,16 @@ async def screenshot_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
         "properties": {
             "index": {
                 "type": "integer",
-                "description": "标签页索引（从0开始），与 title_match 二选一"
+                "description": "标签页索引（从0开始），与 title_match 二选一",
             },
             "title_match": {
                 "type": "string",
-                "description": "按标题模糊匹配标签页，与 index 二选一"
-            }
-        }
+                "description": "按标题模糊匹配标签页，与 index 二选一",
+            },
+        },
     },
     inputs=["flow"],
-    outputs=["flow"]
+    outputs=["flow"],
 )
 async def switch_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """切换标签页。"""
@@ -351,7 +379,7 @@ async def switch_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
 
     if index is not None:
         if index < 0 or index >= len(pages):
-            raise ValueError(f"标签页索引 {index} 超出范围（0-{len(pages)-1}）")
+            raise ValueError(f"标签页索引 {index} 超出范围（0-{len(pages) - 1}）")
         target_page = pages[index]
         await context.log("info", f"切换到标签页 {index}: {target_page.url}")
     elif title_match is not None:
@@ -381,7 +409,7 @@ async def switch_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
         "properties": {},
     },
     inputs=["flow"],
-    outputs=["flow"]
+    outputs=["flow"],
 )
 async def close_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """关闭当前标签页。"""
@@ -402,12 +430,17 @@ async def close_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, An
     remaining_pages = contexts[0].pages
     if remaining_pages:
         context.page = remaining_pages[-1]
-        await context.log("info", f"关闭标签页 {current_url}，切换到 {context.page.url}")
+        await context.log(
+            "info", f"关闭标签页 {current_url}，切换到 {context.page.url}"
+        )
     else:
         context.page = None
         await context.log("info", f"关闭标签页 {current_url}，没有剩余标签页")
 
-    return {"closed_url": current_url, "current_url": context.page.url if context.page else None}
+    return {
+        "closed_url": current_url,
+        "current_url": context.page.url if context.page else None,
+    }
 
 
 @register_action(
@@ -418,27 +451,24 @@ async def close_tab_action(context: Any, config: Dict[str, Any]) -> Dict[str, An
     parameters={
         "type": "object",
         "properties": {
-            "selector": {
-                "type": "string",
-                "description": "CSS选择器"
-            },
+            "selector": {"type": "string", "description": "CSS选择器"},
             "ai_target": {
                 "type": "string",
-                "description": "AI定位目标描述（当 selector 不存在时使用）"
+                "description": "AI定位目标描述（当 selector 不存在时使用）",
             },
             "value": {
                 "type": "string",
-                "description": "要选择的选项值（option的value属性）"
+                "description": "要选择的选项值（option的value属性）",
             },
             "label": {
                 "type": "string",
-                "description": "要选择的选项文本（option的显示文本），与 value 二选一"
-            }
+                "description": "要选择的选项文本（option的显示文本），与 value 二选一",
+            },
         },
-        "required": []
+        "required": [],
     },
     inputs=["flow"],
-    outputs=["flow"]
+    outputs=["flow"],
 )
 async def select_option_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """在下拉框中选择指定选项。"""
@@ -447,7 +477,7 @@ async def select_option_action(context: Any, config: Dict[str, Any]) -> Dict[str
 
     selector = config.get("selector")
     ai_target = config.get("ai_target")
-    
+
     if not selector and not ai_target:
         raise ValueError("select_option 节点需要 selector 或 ai_target 参数")
 
@@ -458,28 +488,38 @@ async def select_option_action(context: Any, config: Dict[str, Any]) -> Dict[str
         raise ValueError("必须提供 value 或 label 参数")
 
     target_desc = selector or ai_target
-    
+
     try:
-        element = await locate_element(
+        locator, effective_selector = await locate_element(
             context.page,
             selector,
             ai_target,
             context,
             wait_for_visible=True,
-            timeout=30000
+            timeout=30000,
         )
 
         if value:
-            await element.select_option(value=value)
-            await context.log("info", f"选择下拉框选项（value）: {target_desc} = {value}")
+            await locator.select_option(value=value)
+            await context.log(
+                "info", f"选择下拉框选项（value）: {target_desc} = {value}"
+            )
         else:
-            await element.select_option(label=label)
-            await context.log("info", f"选择下拉框选项（label）: {target_desc} = {label}")
+            await locator.select_option(label=label)
+            await context.log(
+                "info", f"选择下拉框选项（label）: {target_desc} = {label}"
+            )
+
+        # 如果 AI 定位返回了新的选择器
+        result = {"selected_value": value, "selected_label": label}
+        if effective_selector and effective_selector != selector:
+            result["effective_selector"] = effective_selector
+            await context.log("info", f"AI 定位成功，新选择器: {effective_selector}")
+        return result
+
     except ValueError as e:
         await context.log("error", f"选择下拉框失败: {target_desc}, 错误: {str(e)}")
         raise
-
-    return {"selector": target_desc, "selected_value": value, "selected_label": label}
 
 
 @register_action(
@@ -492,20 +532,14 @@ async def select_option_action(context: Any, config: Dict[str, Any]) -> Dict[str
         "properties": {
             "pixels": {
                 "type": "integer",
-                "description": "滚动像素数，正数向下滚动，负数向上滚动"
+                "description": "滚动像素数，正数向下滚动，负数向上滚动",
             },
-            "to_bottom": {
-                "type": "boolean",
-                "description": "是否滚动到页面底部"
-            },
-            "to_top": {
-                "type": "boolean",
-                "description": "是否滚动到页面顶部"
-            }
-        }
+            "to_bottom": {"type": "boolean", "description": "是否滚动到页面底部"},
+            "to_top": {"type": "boolean", "description": "是否滚动到页面顶部"},
+        },
     },
     inputs=["flow"],
-    outputs=["flow"]
+    outputs=["flow"],
 )
 async def scroll_action(context: Any, config: Dict[str, Any]) -> Dict[str, Any]:
     """滚动页面。"""

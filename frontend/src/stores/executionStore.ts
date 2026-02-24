@@ -1,5 +1,8 @@
 import { create } from 'zustand'
 import { credentialStore, type StorageState } from '@/services/credentialStore'
+import { useWorkflowStore } from './workflowStore'
+import { workflowApi } from '@/api'
+import { toast } from '@/stores/uiStore'
 import type {
   ExecutionState,
   NodeStatus,
@@ -253,6 +256,44 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
             }
           })
           window.dispatchEvent(event)
+        }
+        break
+
+      case 'selector_update':
+        // AI 定位成功后回填选择器到工作流节点并自动保存
+        {
+          const nodeId = message.node_id as string
+          const selector = message.selector as string
+          if (nodeId && selector) {
+            console.log(`[executionStore] 收到选择器更新: node=${nodeId}, selector=${selector}`)
+            const workflowStore = useWorkflowStore.getState()
+            const currentWorkflow = workflowStore.currentWorkflow
+            if (currentWorkflow) {
+              const updatedNodes = currentWorkflow.nodes.map(node =>
+                node.id === nodeId
+                  ? { ...node, config: { ...node.config, selector } }
+                  : node
+              )
+              const updatedWorkflow = { 
+                ...currentWorkflow, 
+                nodes: updatedNodes,
+                updated_at: new Date().toISOString()
+              }
+              
+              // 更新前端状态
+              useWorkflowStore.setState({ currentWorkflow: updatedWorkflow })
+              
+              // 自动保存到后端
+              workflowApi.update(updatedWorkflow.id, updatedWorkflow)
+                .then(() => {
+                  console.log(`[executionStore] 选择器已自动保存: node=${nodeId}`)
+                })
+                .catch((error) => {
+                  console.error(`[executionStore] 自动保存失败:`, error)
+                  toast.error('选择器回填保存失败')
+                })
+            }
+          }
         }
         break
     }

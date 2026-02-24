@@ -94,6 +94,7 @@ export type WSMessageType =
   | 'login_confirmation_received'
   | 'ai_intervention_required'
   | 'debug_locator_result'
+  | 'selector_update'
 
 // WebSocket 消息基础结构
 export interface WSMessage {
@@ -205,4 +206,11 @@ export interface ExecutionRecord {
   completed_nodes: number
   failed_nodes: number
   node_records: NodeExecutionRecord[]
+}
+
+// 选择器更新消息（AI 定位成功后回填）
+export interface WSSelectorUpdate extends WSMessage {
+  type: 'selector_update'
+  node_id: string
+  selector: string
 }

@@ -13,10 +13,23 @@
 import asyncio
 import json
 import hashlib
+from datetime import datetime
+from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass
 from playwright.async_api import Page, Locator, TimeoutError as PlaywrightTimeoutError
 from openai import APIError, RateLimitError, APITimeoutError
+
+
+def _debug_log(msg: str):
+    """调试日志写入文件。"""
+    try:
+        log_file = Path(__file__).parent.parent.parent / "data" / "locator_debug.log"
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.now().isoformat()}] {msg}\n")
+    except Exception:
+        pass
 
 
 @dataclass
@@ -739,11 +752,17 @@ class HybridElementLocator:
         Raises:
             ValueError: 无法定位元素时
         """
+        _debug_log(
+            f"locate() called: saved_selector={saved_selector}, enable_ai_fallback={enable_ai_fallback}, timeout={timeout}"
+        )
+
         if saved_selector:
+            _debug_log(f"有saved_selector，开始验证: {saved_selector}")
             if await self._verify_selector(saved_selector, timeout):
                 await self.context.log(
                     "info", f"使用已保存的选择器定位成功: {saved_selector}"
                 )
+                _debug_log(f"CSS选择器验证通过，返回css结果")
                 return LocationResult(
                     selector=saved_selector,
                     confidence=1.0,
@@ -754,11 +773,14 @@ class HybridElementLocator:
                 await self.context.log(
                     "warning", f"已保存的选择器失效: {saved_selector}"
                 )
+                _debug_log(f"CSS选择器验证失败，检查是否启用AI后备")
 
         if enable_ai_fallback:
             await self.context.log("info", f"启用AI定位: {target_description}")
+            _debug_log(f"启用AI定位: {target_description}")
             return await self._locate_with_ai(target_description, timeout)
 
+        _debug_log(f"无法定位元素，且AI后备未启用")
         raise ValueError(f"无法定位元素: {target_description}")
 
     async def _verify_selector(self, selector: str, timeout: int) -> bool:
@@ -772,11 +794,30 @@ class HybridElementLocator:
             选择器是否有效
         """
         try:
+            _debug_log(f"开始验证CSS选择器: {selector}, timeout={timeout}ms")
             locator = self.page.locator(selector)
+            _debug_log(f"创建locator成功: {selector}")
             await locator.wait_for(state="visible", timeout=timeout)
+            _debug_log(f"等待元素可见成功: {selector}")
             count = await locator.count()
-            return count > 0
-        except Exception:
+            _debug_log(f"匹配元素数量: {count}")
+            is_valid = count > 0
+            if is_valid:
+                await self.context.log(
+                    "debug", f"CSS选择器验证成功: {selector} (匹配 {count} 个)"
+                )
+                _debug_log(f"CSS选择器验证成功: {selector} (匹配 {count} 个)")
+            else:
+                await self.context.log(
+                    "warning", f"CSS选择器验证失败: {selector} (未匹配到元素)"
+                )
+                _debug_log(f"CSS选择器验证失败: {selector} (未匹配到元素)")
+            return is_valid
+        except Exception as e:
+            await self.context.log(
+                "warning", f"CSS选择器验证失败: {selector}, 错误: {str(e)}"
+            )
+            _debug_log(f"CSS选择器验证失败: {selector}, 错误: {str(e)}")
             return False
 
     async def _locate_with_ai(

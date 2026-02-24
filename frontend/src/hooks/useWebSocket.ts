@@ -13,12 +13,13 @@ import type {
 
 interface UseWebSocketOptions {
   onMessage?: (message: WSMessage) => void
+  onSelectorUpdate?: (nodeId: string, selector: string) => void
   autoReconnect?: boolean
   reconnectInterval?: number
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
-  const { onMessage, autoReconnect = true, reconnectInterval = 3000 } = options
+  const { onMessage, onSelectorUpdate, autoReconnect = true, reconnectInterval = 3000 } = options
 
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
@@ -124,8 +125,17 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
           ],
         }))
         break
+
+      case 'selector_update':
+        // AI 定位成功后回填选择器
+        const nodeId = message.node_id as string
+        const selector = message.selector as string
+        if (nodeId && selector && onSelectorUpdate) {
+          onSelectorUpdate(nodeId, selector)
+        }
+        break
     }
-  }, [])
+  }, [onSelectorUpdate])
 
   // 连接 WebSocket
   const connect = useCallback((executionId: string, workflowId?: string) => {

@@ -161,6 +161,45 @@ function ExecuteButton({
   }
 }
 
+// 凭证状态显示组件
+function CredentialStatus({ workflowId }: { workflowId: string }) {
+  const [hasCredential, setHasCredential] = useState(false)
+
+  useEffect(() => {
+    const checkCredential = async () => {
+      const exists = await credentialStore.has(workflowId)
+      setHasCredential(exists)
+    }
+    checkCredential()
+  }, [workflowId])
+
+  const handleClear = async () => {
+    try {
+      await credentialStore.remove(workflowId)
+      setHasCredential(false)
+      toast.success('已清除登录凭证')
+    } catch (error) {
+      toast.error('清除凭证失败')
+    }
+  }
+
+  if (!hasCredential) return null
+
+  return (
+    <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded border border-blue-200">
+      <Shield className="w-3.5 h-3.5" />
+      <span>已登录</span>
+      <button
+        onClick={handleClear}
+        className="ml-1 p-0.5 hover:bg-blue-100 rounded transition-colors"
+        title="清除登录凭证"
+      >
+        <Trash2 className="w-3 h-3" />
+      </button>
+    </div>
+  )
+}
+
 export function Header({
   onExecute,
   onStop,

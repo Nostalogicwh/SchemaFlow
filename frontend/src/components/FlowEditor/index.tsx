@@ -21,7 +21,10 @@ import { NodePanel } from './panels/NodePanel'
 import { Toolbar } from './panels/Toolbar'
 import { useExecutionStore } from '@/stores/executionStore'
 import { useActionStore } from '@/stores/actionStore'
+import { credentialStore } from '@/services/credentialStore'
+import { toast } from '@/stores/uiStore'
 import type { ActionMetadata, Workflow, WorkflowNode, WorkflowEdge, NodeStatus } from '@/types/workflow'
+import { Database, Trash2 } from 'lucide-react'
 
 type FlowNodeData = {
   label: string
@@ -32,6 +35,55 @@ type FlowNodeData = {
 }
 
 type FlowNode = Node<FlowNodeData>
+
+// 凭证状态显示组件
+function StorageStateIndicator({ workflowId }: { workflowId: string }) {
+  const [hasStorageState, setHasStorageState] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    const checkStorageState = async () => {
+      const exists = await credentialStore.has(workflowId)
+      if (mounted) {
+        setHasStorageState(exists)
+      }
+    }
+    checkStorageState()
+    
+    // 每秒检查一次状态变化
+    const interval = setInterval(checkStorageState, 1000)
+    return () => {
+      mounted = false
+      clearInterval(interval)
+    }
+  }, [workflowId])
+
+  const handleClear = async () => {
+    try {
+      await credentialStore.remove(workflowId)
+      setHasStorageState(false)
+      toast.success('已清除网站状态')
+    } catch (error) {
+      toast.error('清除失败')
+    }
+  }
+
+  if (!hasStorageState) return null
+
+  return (
+    <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 text-xs rounded-lg border border-blue-200 shadow-sm">
+      <Database className="w-4 h-4" />
+      <span>已保存网站状态</span>
+      <button
+        onClick={handleClear}
+        className="ml-1 p-1 hover:bg-blue-100 rounded transition-colors"
+        title="清除网站状态"
+      >
+        <Trash2 className="w-3 h-3" />
+      </button>
+    </div>
+  )
+}
 
 interface FlowEditorProps {
   workflow: Workflow | null
@@ -115,6 +167,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
     loadActions()
   }, [])
 
+  // 当 workflow.id 或 workflow.nodes 变化时重新加载
   useEffect(() => {
     if (workflow) {
       const { nodes: flowNodes, edges: flowEdges } = workflowToFlow(workflow)
@@ -122,7 +175,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
       setEdges(flowEdges)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workflow?.id])
+  }, [workflow?.id, workflow?.nodes])
 
   useEffect(() => {
     setNodes((nds) =>
@@ -267,7 +320,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
         <Toolbar actions={actions} hasNodes={nodes.length > 0} onAIGenerate={handleAIGenerate} />
       </div>
 
-      <div className="flex-1 h-full min-w-0" style={{ minHeight: '400px' }}>
+      <div className="flex-1 h-full min-w-0 relative" style={{ minHeight: '400px' }}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -285,6 +338,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
           <Controls showInteractive={false} />
           {showMiniMap && <MiniMap />}
         </ReactFlow>
+        {workflow && <StorageStateIndicator workflowId={workflow.id} />}
       </div>
 
       <div
