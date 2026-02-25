@@ -159,6 +159,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
   const { actions, loadActions } = useActionStore()
   const storeNodeStatuses = useExecutionStore((state) => state.executionState.nodeStatuses)
   const nodeStatuses = externalNodeStatuses || storeNodeStatuses
+  const nodeRecords = useExecutionStore((state) => state.executionState.nodeRecords)
 
   const onNodesChange = onNodesState
   const onEdgesChange = onEdgesState
@@ -366,6 +367,7 @@ function FlowEditorInner({ workflow, nodeStatuses: externalNodeStatuses, onSave 
               actionMetadata={actions}
               onUpdateNode={handleUpdateNode}
               onUpdateNodeLabel={handleUpdateNodeLabel}
+              nodeRecords={nodeRecords}
             />
           </>
         )}

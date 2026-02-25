@@ -328,16 +328,21 @@ async def screenshot_action(context: Any, config: Dict[str, Any]) -> Dict[str, A
     screenshot_bytes = await context.page.screenshot(type="jpeg", quality=60)
     base64_data = base64.b64encode(screenshot_bytes).decode()
 
-    if filename:
-        import os
+    result = {"data": base64_data}
 
-        save_dir = context.data_dir / "screenshots"
+    if filename:
+        # 按 workflow_id 分目录存储
+        save_dir = context.data_dir / "screenshots" / context.workflow_id
         save_dir.mkdir(parents=True, exist_ok=True)
         filepath = save_dir / filename
         with open(filepath, "wb") as f:
             f.write(screenshot_bytes)
 
-    return {"data": base64_data}
+        # 返回截图访问路径
+        result["screenshot_path"] = f"/api/screenshots/{context.workflow_id}/{filename}"
+        await context.log("info", f"截图已保存: {result['screenshot_path']}")
+
+    return result
 
 
 @register_action(
