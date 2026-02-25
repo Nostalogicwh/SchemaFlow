@@ -4,28 +4,27 @@
  */
 import { useCallback, useState } from 'react'
 import type { Node } from '@xyflow/react'
-import type { ActionMetadata, JsonSchemaProperty } from '@/types/workflow'
+import type { ActionMetadata, JsonSchemaProperty, NodeExecutionRecord } from '@/types/workflow'
 import { EmptyState } from '@/components/common'
 import { Input } from '@/components/ui/Input'
-import { MousePointer2, Settings2, Bug } from 'lucide-react'
+import { MousePointer2, Settings2, Image } from 'lucide-react'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
 import { FormField } from '@/components/ui/FormField'
 import { Tag } from '@/components/ui/Tag'
 import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
 import { cn } from '@/utils'
-import { DebugLocatorModal } from '@/components/FlowEditor/DebugLocatorModal'
+import ImageViewer from '../../ui/ImageViewer'
 
 interface NodePanelProps {
   selectedNode: Node | null
   actionMetadata: ActionMetadata[]
   onUpdateNode: (nodeId: string, config: Record<string, unknown>) => void
   onUpdateNodeLabel: (nodeId: string, label: string) => void
-  wsConnection?: WebSocket | null
+  nodeRecords?: NodeExecutionRecord[]
 }
 
-export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdateNodeLabel, wsConnection }: NodePanelProps) {
+export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdateNodeLabel, nodeRecords = [] }: NodePanelProps) {
   // 获取当前节点的元数据
   const metadata = actionMetadata.find(a => a.name === selectedNode?.type)
 
@@ -36,9 +35,6 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdate
     status?: 'idle' | 'running' | 'completed' | 'failed'
     config?: Record<string, unknown>
   } | undefined
-
-  // 调试弹窗状态
-  const [isDebugModalOpen, setIsDebugModalOpen] = useState(false)
 
   // 更新配置
   const handleChange = useCallback(
@@ -88,6 +84,12 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdate
   // 获取分类图标和标签
   const category = (nodeData?.category as 'browser' | 'data' | 'control' | 'ai' | 'base') || 'base'
   const nodeStatus = nodeData?.status || 'idle'
+
+  // 查找当前节点的执行记录（用于截图展示）
+  const nodeRecord = nodeRecords.find(r => r.node_id === selectedNode.id)
+  const screenshotPath = nodeRecord?.result?.screenshot_path as string | undefined
+  const isScreenshotNode = metadata.name === 'screenshot'
+  const [viewerOpen, setViewerOpen] = useState(false)
 
   return (
     <div className="p-4">
@@ -159,7 +161,71 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdate
             </div>
           </div>
         )}
-      </div>
+
+        {/* 截图展示 - 仅对截图节点且执行完成后显示 */}
+        {isScreenshotNode && screenshotPath && (
+          <div className="border-t pt-4 mt-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Image className="w-4 h-4 text-gray-500" />
+              <label className="text-sm font-medium text-gray-700">截图预览</label>
+            </div>
+            {/* Debug info */}
+            <div className="text-xs text-gray-400 mb-2 font-mono break-all overflow-wrap-anywhere">
+              路径: {screenshotPath}
+            </div>
+            <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+              <img
+                src={`http://localhost:8000${screenshotPath}`}
+                alt="节点截图"
+                className="w-full h-auto max-h-48 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setViewerOpen(true)}
+                onError={(e) => {
+                  const img = e.target as HTMLImageElement;
+                  img.style.display = 'none';
+                  // 显示错误提示
+                  const errorDiv = document.createElement('div');
+                  errorDiv.className = 'p-4 text-sm text-red-500 text-center';
+                  errorDiv.innerHTML = `截图加载失败<br/>路径: ${screenshotPath}`;
+                  img.parentElement?.appendChild(errorDiv);
+                }}
+              />
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              每次执行会覆盖之前的截图
+            </p>
+          </div>
+        )}
+
+        {/* 截图占位提示 - 增强调试信息 */}
+        {isScreenshotNode && !screenshotPath && (
+          <div className="border-t pt-4 mt-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Image className="w-4 h-4 text-gray-400" />
+              <label className="text-sm font-medium text-gray-400">截图预览</label>
+            </div>
+            <div className="border border-dashed border-gray-200 rounded-lg p-4 bg-gray-50 text-center">
+              <p className="text-sm text-gray-400 mb-2">执行后此处将显示截图</p>
+              {nodeRecord && (
+                <p className="text-xs text-gray-500">
+                  节点状态: {nodeRecord.status} 
+                  {nodeRecord.result ? `(有结果数据)` : '(无结果数据)'}
+                </p>
+              )}
+            </div>
+          </div>
+)}
+       </div>
+
+      {/* 截图放大查看器 */}
+      {screenshotPath && (
+        <ImageViewer
+          src={`http://localhost:8000${screenshotPath}`}
+          isOpen={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          downloadable
+          filename={`screenshot-${selectedNode?.id}.jpg`}
+        />
+      )}
     </div>
   )
 }
