@@ -200,14 +200,14 @@
 
 ---
 
-### OPT-05：去除冗余的回退策略
+### OPT-05：去除冗余的回退策略 ✅
 
 **问题**：AI 定位中存在多余的回退策略代码。
 
 **修复方案**：
-- [ ] 审查 `locator.py` 中 `try_fallback_strategies()` 的各个策略，保留 CSS → AI 主链路，移除 `get_by_role`、`get_by_text` 等冗余回退
-- [ ] 简化 `locate_with_ai()` 内部的重试逻辑，减少不必要的 AI 调用次数
-- [ ] 移除 `_get_accessibility_snapshot()` 与 `extract_interactive_elements()` 的重复代码
+- [x] 审查 `locator.py` 中 `try_fallback_strategies()` 的各个策略，保留 CSS → AI 主链路，移除 `get_by_role`、`get_by_text` 等冗余回退（**注**：经用户确认，回退策略保留暴露，只清理了冗余代码）
+- [x] 简化 `locate_with_ai()` 内部的重试逻辑，减少不必要的 AI 调用次数（**注**：删除了未使用的模块级函数）
+- [x] 移除 `_get_accessibility_snapshot()` 与 `extract_interactive_elements()` 的重复代码（**注**：保留类内方法，删除重复的外部函数）
 
 **涉及文件**：
 - `backend/engine/ai/locator.py`
@@ -243,31 +243,39 @@
 
 ---
 
-### OPT-08：截图节点文件存储与查看
+### OPT-08：截图节点文件存储与查看 ✅
 
 **问题**：截图保存的文件无法被专门存储和查看。
 
-**修复方案**：
-- [ ] 后端截图保存后，将文件相对路径记录在执行记录中
-- [ ] 新增 API `GET /api/screenshots/{filename}` 提供静态文件访问
-- [ ] 前端在执行记录的节点详情中展示截图缩略图，支持点击查看大图和下载
-- [ ] 截图文件按工作流 ID + 执行 ID 分目录存储，便于管理和清理
+**已完成的修复**（基础功能）：
+- [x] 后端截图保存后，将文件相对路径记录在执行记录中
+- [x] 新增 API `GET /api/screenshots/{workflow_id}/{filename}` 提供静态文件访问
+- [x] 前端在节点属性面板展示截图预览
+- [x] 截图文件按工作流 ID 分目录存储，使用节点 ID 作为文件名（覆盖旧截图）
+
+**已完成优化项**：
+- [x] 支持点击查看大图和下载（新增 ImageViewer 组件）
+- [x] 实时截图也支持点击放大查看
+
+**后续可优化项**：
+- [ ] 优化截图文件命名和存储策略
+- [ ] 增加截图历史版本管理
 
 **涉及文件**：
-- `backend/engine/actions/browser.py` — `screenshot_action` 返回文件路径
-- `backend/main.py` — 挂载静态文件路由
-- `frontend/src/components/ExecutionPanel/` — 截图展示组件
+- `backend/engine/actions/browser.py` — `screenshot_action`
+- `backend/main.py` — 截图访问路由
+- `frontend/src/components/FlowEditor/panels/NodePanel.tsx` — 截图展示
 
 ---
 
-### OPT-09：页面加载不全（滚动加载场景）
+### OPT-09：页面加载不全（滚动加载场景）✅
 
 **问题**：疑似滚动加载（lazy-load）导致页面内容未完全加载。
 
 **修复方案**：
-- [ ] `scroll` action 增加 `wait_after_scroll` 参数，滚动后等待指定时间让懒加载内容渲染
-- [ ] 新增 `scroll_to_load_all` action 或在 `scroll` 中增加模式：循环滚动到底部，每次滚动后等待新内容出现，直到页面高度不再变化
-- [ ] `navigate` action 增加 `wait_until` 参数选项：`load` / `domcontentloaded` / `networkidle`，默认改为 `networkidle` 以等待异步请求完成
+- [x] `scroll` action 增加 `wait_after_scroll` 参数，滚动后等待指定时间让懒加载内容渲染
+- [x] 新增 `scroll_to_load_all` action：循环滚动到底部，每次滚动后等待新内容出现，直到页面高度不再变化
+- [x] `navigate` action 增加 `wait_until` 参数选项：`load` / `domcontentloaded` / `networkidle`，默认改为 `domcontentloaded`（最快）
 
 **涉及文件**：
 - `backend/engine/actions/browser.py` — `scroll_action` 和 `navigate_action`
@@ -276,13 +284,13 @@
 
 ## 三、新增功能（P2）
 
-### NEW-01：工作流触发 API + 服务级鉴权
+### NEW-01：工作流触发 API + 服务级鉴权 ✅
 
 **问题**：需要将工作流暴露为可外部调用的 API，支持 API Key 鉴权，并提供 Skill 调用方式。
 
-**设计方案**：
+**已完成的修复**（基础功能）：
 
-#### 1. API 触发端点
+#### 1. API 触发端点 ✅
 ```
 POST /api/trigger/{workflow_id}
 Headers: X-API-Key: <key>
@@ -290,30 +298,31 @@ Body: { "variables": { ... }, "headless": true }
 Response: { "execution_id": "xxx", "status": "started" }
 ```
 
-#### 2. 鉴权机制
-- 新增 API Key 管理：生成、吊销、列表
-- API Key 存储在本地 JSON 文件（`data/api_keys.json`），包含 key hash、创建时间、权限范围
-- FastAPI 中间件拦截 `/api/trigger/*` 路由，校验 `X-API-Key` 请求头
-- 内部 API（`/api/workflows`、`/api/executions`）暂不加鉴权，仅触发端点需要
+#### 2. 鉴权机制 ✅
+- [x] API Key 管理：生成、校验（存储在 `data/api_keys.json`）
+- [x] FastAPI 路由校验 `X-API-Key` 请求头
+- [x] 前端右上角添加"API"按钮，显示调用示例（cURL 和 JS）
 
-#### 3. 执行结果获取
+#### 3. 执行结果获取 ✅
 ```
 GET /api/trigger/{execution_id}/result
 Headers: X-API-Key: <key>
 Response: { "status": "completed", "results": { ... } }
 ```
 
-#### 4. Skill 调用方式
-- 提供 Claude Code Skill 文件模板，调用方通过 `curl` 或 SDK 触发工作流
-- Skill 文件中封装触发 API 的调用方式和参数说明
+**已完成优化项**：
+- [x] Skill 文件模板（API 帮助弹窗新增 Skill 标签页）
+- [x] 后端 API 测试用例（`tests/test_trigger_api.py`）
 
-**修复方案**：
-- [ ] 新增 `backend/api/trigger.py` — 触发端点和结果查询端点
-- [ ] 新增 `backend/auth/` — API Key 生成、存储、校验
-- [ ] `backend/main.py` — 注册触发路由和鉴权中间件
-- [ ] `backend/engine/executor.py` — 支持无 WebSocket 的纯 REST 执行模式（结果写入文件/内存，通过轮询获取）
-- [ ] 新增 `docs/api/trigger.md` — 触发 API 文档
-- [ ] 新增 Skill 模板文件
+**后续可优化项**：
+- [ ] 执行结果持久化和查询优化
+- [ ] API Key 管理界面（生成、吊销、列表）
+
+**涉及文件**：
+- `backend/api/trigger.py` — 触发端点和结果查询
+- `backend/api/auth.py` — API Key 管理
+- `backend/main.py` — 路由注册
+- `frontend/src/components/Header.tsx` — API 调用说明弹窗
 
 ---
 
@@ -332,12 +341,12 @@ Response: { "status": "completed", "results": { ... } }
 | P1 | OPT-04 | 节点连线拖拽 | 低 | 9 | ✅ 已完成 |
 | P1 | OPT-02 | 属性面板样式 | 低 | 10 | ✅ 已完成 |
 | P1 | OPT-03 | 弹窗样式超出 | 低 | 11 | ✅ 已完成 |
-| P1 | OPT-05 | 冗余回退策略 | 中 | 12 | 待处理 |
-| P1 | OPT-08 | 截图存储查看 | 中 | 13 | 待处理 |
-| P1 | OPT-09 | 滚动加载处理 | 中 | 14 | 待处理 |
-| P2 | NEW-01 | 触发 API+鉴权 | 高 | 15 | 待处理 |
+| P1 | OPT-05 | 冗余回退策略 | 中 | 12 | ✅ 已完成 |
+| P1 | OPT-08 | 截图存储查看 | 中 | 13 | ✅ 已完成 |
+| P1 | OPT-09 | 滚动加载处理 | 中 | 14 | ✅ 已完成 |
+| P2 | NEW-01 | 触发 API+鉴权 | 高 | 15 | ✅ 已完成 |
 
 **建议**：
 - ✅ P0 阻断性问题已全部完成
-- ✅ OPT-01、OPT-02、OPT-03、OPT-04、OPT-06、OPT-07 优化已完成
-- OPT-05、OPT-08、OPT-09 和 NEW-01（触发 API）待处理
+- ✅ 所有 P1 优化项已完成
+- ✅ NEW-01（触发 API）已完成，包括 Skill 模板和 API 测试
