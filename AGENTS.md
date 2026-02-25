@@ -101,6 +101,20 @@ cd backend
 - 完成后合并回 `main` 分支
 - 禁止直接在 `main` 提交版本功能
 
+### Git 操作规范
+- **禁止频繁切换分支**：在同一分支完成开发，避免来回切换导致状态混乱
+- **禁止随意合并**：合并分支前必须确认用户意图，合并后需用户确认
+- **数据目录不提交**：`backend/data/` 下的所有数据文件已在 `.gitignore` 中，禁止提交
+- **合并前检查**：确保没有未提交的更改，使用 `git stash` 暂存后再操作
+- **推送前确认**：推送远程前必须告知用户
+
+### 数据管理
+- **工作流数据**：`backend/data/workflows/*.json` 不纳入版本控制
+- **截图数据**：`backend/data/screenshots/` 不纳入版本控制
+- **浏览器状态**：`backend/data/browser_states/` 不纳入版本控制
+- **API 密钥**：`backend/data/api_keys.json` 不纳入版本控制
+- **执行日志**：`backend/data/logs/*.json` 不纳入版本控制
+
 ### Python 环境
 - **强制要求**：所有 Python 操作必须使用 `backend/.venv/bin/python`
 - 禁止使用系统 Python
