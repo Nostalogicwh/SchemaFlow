@@ -7,6 +7,7 @@ import { NodeRecordList } from './NodeRecordList'
 import { AIInterventionPrompt } from './AIInterventionPrompt'
 import { twSemanticColors, twColors, twTransitions } from '@/constants/designTokens'
 import { FileText } from 'lucide-react'
+import ImageViewer from '../ui/ImageViewer'
 
 export function ExecutionPanel() {
   const { executionState, isConnected, sendWS } = useExecutionStore()
@@ -111,6 +112,7 @@ function CompactModeLayout() {
   const { screenshot, nodeRecords, logs } = executionState
   const [screenshotHeight, setScreenshotHeight] = useState(200)
   const [logsHeight, setLogsHeight] = useState(150)
+  const [viewerOpen, setViewerOpen] = useState(false)
   const startYRef = useRef(0)
   const startHeightRef = useRef(0)
   const dragTypeRef = useRef<'screenshot' | 'logs' | null>(null)
@@ -158,7 +160,8 @@ function CompactModeLayout() {
             <img
               src={`data:image/jpeg;base64,${screenshot}`}
               alt="执行截图"
-              className="max-w-full rounded p-2"
+              className="w-full h-full object-contain cursor-pointer hover:opacity-90 transition-opacity"
+              onClick={() => setViewerOpen(true)}
             />
           ) : (
             <div className="h-full flex items-center justify-center text-gray-400 text-sm">
@@ -180,6 +183,12 @@ function CompactModeLayout() {
           <LogViewer logs={logs} compact />
         </div>
       </div>
+
+      <ImageViewer
+        src={`data:image/jpeg;base64,${screenshot}`}
+        isOpen={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+      />
     </div>
   )
 }
