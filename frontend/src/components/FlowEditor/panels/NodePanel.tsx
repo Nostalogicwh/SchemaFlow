@@ -25,6 +25,8 @@ interface NodePanelProps {
 }
 
 export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdateNodeLabel, nodeRecords = [] }: NodePanelProps) {
+  const [viewerOpen, setViewerOpen] = useState(false)
+
   // 获取当前节点的元数据
   const metadata = actionMetadata.find(a => a.name === selectedNode?.type)
 
@@ -89,7 +91,6 @@ export function NodePanel({ selectedNode, actionMetadata, onUpdateNode, onUpdate
   const nodeRecord = nodeRecords.find(r => r.node_id === selectedNode.id)
   const screenshotPath = nodeRecord?.result?.screenshot_path as string | undefined
   const isScreenshotNode = metadata.name === 'screenshot'
-  const [viewerOpen, setViewerOpen] = useState(false)
 
   return (
     <div className="p-4">
