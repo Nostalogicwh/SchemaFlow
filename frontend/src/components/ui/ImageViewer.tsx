@@ -67,7 +67,7 @@ function ImageViewer({ src, isOpen, onClose, downloadable = false, filename = 'i
 
   const handleDownload = useCallback(() => {
     const link = document.createElement('a')
-    link.href = src.startsWith('data:') ? src : src
+    link.href = src
     link.download = filename
     document.body.appendChild(link)
     link.click()
