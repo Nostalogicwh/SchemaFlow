@@ -105,9 +105,8 @@ async def health():
 @app.get("/api/screenshots/{workflow_id}/{filename}")
 async def get_screenshot(workflow_id: str, filename: str):
     """获取截图文件。"""
-    from config import get_settings
-
-    data_dir = Path(get_settings()["storage"]["data_dir"])
+    # 使用相对于后端根目录的 data 目录
+    data_dir = Path(__file__).parent / "data"
     screenshot_path = data_dir / "screenshots" / workflow_id / filename
 
     if not screenshot_path.exists():
