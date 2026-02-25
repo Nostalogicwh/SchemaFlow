@@ -37,11 +37,21 @@ function ImageViewer({ src, isOpen, onClose, downloadable = false, filename = 'i
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, onClose])
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault()
-    const delta = e.deltaY > 0 ? -0.1 : 0.1
-    setScale(prev => Math.min(Math.max(0.5, prev + delta), 5))
-  }, [])
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? -0.1 : 0.1
+      setScale(prev => Math.min(Math.max(0.5, prev + delta), 5))
+    }
+
+    const container = containerRef.current
+    if (container) {
+      container.addEventListener('wheel', handleWheel, { passive: false })
+      return () => container.removeEventListener('wheel', handleWheel)
+    }
+  }, [isOpen])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return
@@ -132,7 +142,6 @@ function ImageViewer({ src, isOpen, onClose, downloadable = false, filename = 'i
       <div
         ref={containerRef}
         className="w-full h-full flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing"
-        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
