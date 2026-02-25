@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from api import workflows, actions, execution, ai_generate
 from api.exceptions import APIException
 from engine.actions import base, browser, data, control
+from fastapi.responses import FileResponse
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -99,6 +100,26 @@ async def root():
 async def health():
     """健康检查。"""
     return {"status": "ok"}
+
+
+@app.get("/api/screenshots/{workflow_id}/{filename}")
+async def get_screenshot(workflow_id: str, filename: str):
+    """获取截图文件。"""
+    from config import get_settings
+
+    data_dir = Path(get_settings()["storage"]["data_dir"])
+    screenshot_path = data_dir / "screenshots" / workflow_id / filename
+
+    if not screenshot_path.exists():
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "error": {"code": "NOT_FOUND", "message": "截图文件不存在"},
+            },
+        )
+
+    return FileResponse(screenshot_path, media_type="image/jpeg")
 
 
 if __name__ == "__main__":
