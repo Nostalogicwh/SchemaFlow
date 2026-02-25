@@ -184,11 +184,13 @@ function CompactModeLayout() {
         </div>
       </div>
 
-      <ImageViewer
-        src={`data:image/jpeg;base64,${screenshot}`}
-        isOpen={viewerOpen}
-        onClose={() => setViewerOpen(false)}
-      />
+      {screenshot && (
+        <ImageViewer
+          src={`data:image/jpeg;base64,${screenshot}`}
+          isOpen={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+        />
+      )}
     </div>
   )
 }
