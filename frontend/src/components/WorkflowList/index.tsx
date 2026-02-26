@@ -222,7 +222,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                  <div className="flex items-center gap-1">
                     <Button
                       variant="secondary"
                       size="sm"
@@ -233,9 +233,9 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                       }}
                       title="快速执行"
                       aria-label={`快速执行: ${workflow.name}`}
-                      className="pointer-events-none group-hover:pointer-events-auto bg-white border border-neutral-200 hover:border-green-300 hover:bg-green-50"
+                      className="bg-white border border-neutral-300 shadow-sm hover:border-green-400 hover:bg-green-50 hover:text-green-600"
                     >
-                      <Play className="w-3.5 h-3.5 text-neutral-600 hover:text-green-600" />
+                      <Play className="w-3.5 h-3.5 text-neutral-500" />
                     </Button>
                     <Button
                       variant="secondary"
@@ -244,9 +244,9 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                       onClick={(e) => handleDelete(workflow.id, e as React.MouseEvent)}
                       title="删除工作流"
                       aria-label={`删除工作流: ${workflow.name}`}
-                      className="pointer-events-none group-hover:pointer-events-auto bg-white border border-neutral-200 hover:border-red-300 hover:bg-red-50"
+                      className="bg-white border border-neutral-300 shadow-sm hover:border-red-400 hover:bg-red-50 hover:text-red-600"
                     >
-                      <Trash2 className="w-3.5 h-3.5 text-neutral-600 hover:text-red-600" />
+                      <Trash2 className="w-3.5 h-3.5 text-neutral-500" />
                     </Button>
                   </div>
                 </div>
