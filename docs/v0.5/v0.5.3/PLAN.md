@@ -115,6 +115,17 @@
 | `types/execution.ts` | `backend/engine/context.py` |
 | `api/index.ts` | `backend/api/*.py` |
 
+**发现的问题**:
+1. **NodeStatus枚举不一致**: 
+   - 前端: `'idle' \| 'running' \| 'completed' \| 'failed'`
+   - 后端: `PENDING, RUNNING, COMPLETED, FAILED, SKIPPED`
+2. **缺少Pydantic模型**: 后端API直接使用`Dict[str, Any]`，无运行时类型检查
+
+**建议后续版本处理**:
+- 创建 `backend/models/schemas.py` 定义Pydantic模型
+- 统一NodeStatus枚举值
+- 添加API请求/响应模型验证
+
 **验收标准**:
 - [ ] 字段命名一致
 - [ ] 必填/可选字段匹配
