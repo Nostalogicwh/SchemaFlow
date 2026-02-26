@@ -3,11 +3,8 @@
 import logging
 from typing import Tuple, Optional, List
 import socket
-import subprocess
-import re
 import sys
 
-from playwright.async_api import Error
 
 logger = logging.getLogger(__name__)
 
@@ -100,11 +97,11 @@ class BrowserManager:
             (is_cdp, reused_page) - 固定返回 (False, False)，保留接口兼容
         """
         logger.info(f"[{context.execution_id}] 浏览器连接开始")
-        await context.log("debug", f"BrowserManager.connect() 开始")
+        await context.log("debug", "BrowserManager.connect() 开始")
 
         if context.browser is not None:
             is_cdp = getattr(context, "_is_cdp", False)
-            await context.log("info", f"浏览器已连接，复用现有状态")
+            await context.log("info", "浏览器已连接，复用现有状态")
             return is_cdp, getattr(context, "_reused_page", False)
 
         from playwright.async_api import async_playwright
@@ -149,7 +146,7 @@ class BrowserManager:
                 context._is_cdp = True
                 context._reused_page = False
                 context._headless = False
-                await context.log("info", f"✓ CDP 连接成功")
+                await context.log("info", "✓ CDP 连接成功")
                 return True, False
             except Exception as e:
                 await context.log("warning", f"CDP 连接失败: {e}，回退到独立浏览器")

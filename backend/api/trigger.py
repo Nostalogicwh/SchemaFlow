@@ -4,7 +4,7 @@ POST /api/trigger/{workflow_id} - 触发工作流执行
 GET  /api/trigger/{execution_id}/result - 获取执行结果
 """
 
-from fastapi import APIRouter, Header, HTTPException, Depends
+from fastapi import APIRouter, Header, Depends
 from typing import Optional, Dict, Any
 from pydantic import BaseModel
 

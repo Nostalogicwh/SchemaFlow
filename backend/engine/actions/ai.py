@@ -68,7 +68,7 @@ async def ai_action_action(context: Any, config: Dict[str, Any]) -> Dict[str, An
         
         result = await agent.run()
         
-        await context.log("info", f"AI自动化完成")
+        await context.log("info", "AI自动化完成")
         
         return {
             "result": "AI自动化执行完成",

@@ -165,7 +165,7 @@ def get_model_for_scenario(scenario: str) -> Dict[str, Any]:
         logger.debug(f"场景 '{scenario}' 未配置，使用默认模型: {model_name}")
 
     if not model_name:
-        logger.warning(f"未找到默认模型配置，返回空配置")
+        logger.warning("未找到默认模型配置，返回空配置")
         return {}
 
     # 获取模型配置

@@ -1,6 +1,5 @@
 """API 触发端点测试"""
 
-import pytest
 from httpx import AsyncClient
 
 

@@ -115,7 +115,7 @@ async def test_websocket(workflow_id: str, execution_id: str):
                     elif msg_type == "log":
                         print(f"📝 日志: [{data.get('level')}] {data.get('message')}")
                     elif msg_type == "execution_complete":
-                        print(f"\n✓ 执行完成！")
+                        print("\n✓ 执行完成！")
                         print(f"  成功: {data.get('success')}")
                         print(f"  耗时: {data.get('duration'):.2f}s")
                         break
