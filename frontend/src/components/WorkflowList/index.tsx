@@ -69,7 +69,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
     setNewWorkflowDescription('')
     setNameError('')
     setIsCreateModalOpen(true)
-    onCreate?.()
+    // 不再调用 onCreate?.()，避免触发 App.tsx 的 prompt
   }
 
   const handleCloseCreateModal = () => {
