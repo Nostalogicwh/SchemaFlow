@@ -3,16 +3,30 @@ import { useExecutionStore } from '@/stores/executionStore'
 import { credentialStore } from '@/services/credentialStore'
 import type { WSMessage } from '@/types/workflow'
 
+/** useExecution Hook 选项 */
 interface UseExecutionOptions {
+  /** 是否自动重连，默认 true */
   autoReconnect?: boolean
+  /** 重连间隔（毫秒），默认 3000 */
   reconnectInterval?: number
 }
 
+/**
+ * 工作流执行 Hook
+ * 管理 WebSocket 连接、执行控制和用户交互
+ * @param options - 配置选项
+ * @returns 执行控制方法
+ * @example
+ * const { connect, startExecution, stopExecution } = useExecution()
+ */
 export function useExecution(options: UseExecutionOptions = {}) {
   const { autoReconnect = true, reconnectInterval = 3000 } = options
 
+  /** 重连定时器引用 */
   const reconnectTimerRef = useRef<number | null>(null)
+  /** 工作流ID引用（用于重连） */
   const workflowIdRef = useRef<string | null>(null)
+  /** 执行ID引用（用于重连） */
   const executionIdRef = useRef<string | null>(null)
 
   const {
@@ -29,8 +43,14 @@ export function useExecution(options: UseExecutionOptions = {}) {
     setCurrentWorkflowId,
   } = useExecutionStore()
 
+  /** connect 函数的引用，用于重连时调用 */
   const connectRef = useRef<(executionId: string, workflowId?: string) => void>(() => {})
 
+  /**
+   * 建立 WebSocket 连接
+   * @param executionId - 执行ID
+   * @param workflowId - 工作流ID（可选）
+   */
   const connect = useCallback(
     (executionId: string, workflowId?: string) => {
       const oldWs = useExecutionStore.getState()._ws
@@ -86,10 +106,16 @@ export function useExecution(options: UseExecutionOptions = {}) {
     [autoReconnect, reconnectInterval, setConnected, setExecutionId, setWebSocket, setCurrentWorkflowId]
   )
 
+  /**
+   * 同步 connect 函数到 ref，供重连使用
+   */
   useEffect(() => {
     connectRef.current = connect
   }, [connect])
 
+  /**
+   * 断开 WebSocket 连接
+   */
   const disconnect = useCallback(() => {
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current)
@@ -102,10 +128,16 @@ export function useExecution(options: UseExecutionOptions = {}) {
     setConnected(false)
   }, [setConnected, setWebSocket])
 
+  /**
+   * 开始执行工作流
+   * @param workflowId - 工作流ID（可选，默认使用当前连接的）
+   * @param mode - 执行模式
+   */
   const startExecution = useCallback(
     async (workflowId?: string, mode: 'headless' | 'headed' = 'headless') => {
       const wfId = (typeof workflowId === 'string' ? workflowId : null) || workflowIdRef.current
       if (wfId) {
+        // 获取已保存的凭证
         const credentials = await credentialStore.get(wfId)
         if (credentials) {
           console.log(`[startExecution] 注入凭证: workflow=${wfId}, cookies=${credentials.cookies?.length || 0}`)
@@ -125,6 +157,10 @@ export function useExecution(options: UseExecutionOptions = {}) {
     [sendWS]
   )
 
+  /**
+   * 停止执行
+   * @param executionId - 执行ID（可选）
+   */
   const stopExecution = useCallback(
     async (executionId?: string) => {
       sendWS({ type: 'stop_execution' })
@@ -141,6 +177,11 @@ export function useExecution(options: UseExecutionOptions = {}) {
     [sendWS, executionState.executionId]
   )
 
+  /**
+   * 响应用户输入请求
+   * @param nodeId - 节点ID
+   * @param action - 用户操作：继续或取消
+   */
   const respondUserInput = useCallback(
     (nodeId: string, action: 'continue' | 'cancel') => {
       console.log(`[respondUserInput] 发送响应: node_id=${nodeId}, action=${action}`)
@@ -154,6 +195,10 @@ export function useExecution(options: UseExecutionOptions = {}) {
     [sendWS]
   )
 
+  /**
+   * 确认登录完成
+   * @param executionId - 执行ID
+   */
   const confirmLogin = useCallback(
     (executionId: string) => {
       sendWS({
@@ -164,6 +209,9 @@ export function useExecution(options: UseExecutionOptions = {}) {
     [sendWS]
   )
 
+  /**
+   * 组件卸载时断开连接
+   */
   useEffect(() => {
     return () => {
       disconnect()
