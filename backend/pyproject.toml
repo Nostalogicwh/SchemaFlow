@@ -15,9 +15,6 @@ dependencies = [
     "tomli>=2.0.1",
     "pyyaml>=6.0.1",
     "browser-use>=0.1.40",
-    "langchain>=0.3.18",
-    "langchain-core>=0.3.35",
-    "langchain-openai>=0.3.1",
 ]
 
 [build-system]

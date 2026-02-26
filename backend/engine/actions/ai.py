@@ -55,14 +55,14 @@ async def ai_action_action(context: Any, config: Dict[str, Any]) -> Dict[str, An
 
     try:
         from browser_use import Agent
-        from langchain_openai import ChatOpenAI
+        from browser_use.llm.openai.chat import ChatOpenAI
         from config import get_settings
 
         # 获取LLM配置
         settings = get_settings()
         llm_cfg = settings.get("llm", {})
 
-        # 创建 LangChain ChatOpenAI 对象（browser-use 需要）
+        # 创建 browser-use 的 ChatOpenAI 对象
         llm = ChatOpenAI(
             model=llm_cfg.get("model", "gpt-4o"),
             api_key=llm_cfg.get("api_key"),
