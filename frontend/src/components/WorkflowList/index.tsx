@@ -222,7 +222,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-0.5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -233,6 +233,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                       }}
                       title="快速执行"
                       aria-label={`快速执行: ${workflow.name}`}
+                      className="pointer-events-none group-hover:pointer-events-auto"
                     >
                       <Play className="w-3.5 h-3.5 text-neutral-400 hover:text-green-500" />
                     </Button>
@@ -243,6 +244,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                       onClick={(e) => handleDelete(workflow.id, e as React.MouseEvent)}
                       title="删除工作流"
                       aria-label={`删除工作流: ${workflow.name}`}
+                      className="pointer-events-none group-hover:pointer-events-auto"
                     >
                       <Trash2 className="w-3.5 h-3.5 text-neutral-400 hover:text-red-500" />
                     </Button>
