@@ -45,17 +45,13 @@ async def ai_action_action(context: Any, config: Dict[str, Any]) -> Dict[str, An
     if not prompt:
         raise ValueError("ai_action 节点需要 prompt 参数")
 
-    if not context.browser:
-        raise ValueError("浏览器未初始化")
-
-    if not context.page:
-        raise ValueError("页面未初始化")
-
     await context.log("info", f"AI自动化开始: {prompt[:50]}...")
 
     try:
         from browser_use import Agent
         from browser_use.llm.openai.chat import ChatOpenAI
+        from browser_use.browser.session import BrowserSession
+        from browser_use.browser.profile import BrowserProfile
         from config import get_settings
 
         # 获取LLM配置
@@ -70,11 +66,31 @@ async def ai_action_action(context: Any, config: Dict[str, Any]) -> Dict[str, An
             temperature=0.1,
         )
 
+        # 创建 browser-use 的 BrowserSession
+        # 如果有 CDP URL，连接到现有浏览器
+        cdp_url = None
+        if context.browser:
+            # 尝试获取 CDP URL
+            try:
+                if hasattr(context.browser, "ws_endpoint"):
+                    cdp_url = context.browser.ws_endpoint
+                elif hasattr(context, "_cdp_url"):
+                    cdp_url = context._cdp_url
+            except:
+                pass
+
+        # 创建 BrowserSession
+        browser_session = BrowserSession(
+            cdp_url=cdp_url,
+            is_local=True,
+            headless=False,
+        )
+
+        # 创建 Agent
         agent = Agent(
             task=prompt,
             llm=llm,
-            browser=context.browser,
-            browser_context=context.page.context,
+            browser_session=browser_session,
             max_actions=max_steps,
         )
 
@@ -94,3 +110,6 @@ async def ai_action_action(context: Any, config: Dict[str, Any]) -> Dict[str, An
     except (RuntimeError, TimeoutError) as e:
         await context.log("error", f"AI自动化失败: {str(e)}")
         raise ValueError(f"AI自动化执行失败: {str(e)}")
+    except Exception as e:
+        await context.log("error", f"AI自动化错误: {str(e)}")
+        raise ValueError(f"AI自动化执行错误: {str(e)}")
