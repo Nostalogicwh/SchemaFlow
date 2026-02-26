@@ -1,12 +1,13 @@
 """SchemaFlow 后端主入口。"""
 
 import logging
+import sys
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.exceptions import RequestValidationError
-from pathlib import Path
-import sys
 
 # 配置日志系统
 from config import setup_logging
@@ -19,7 +20,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from api import workflows, actions, execution, ai_generate
 from api.exceptions import APIException
-from fastapi.responses import FileResponse
 
 # 创建 FastAPI 应用
 app = FastAPI(

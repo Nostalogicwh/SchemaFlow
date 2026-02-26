@@ -466,7 +466,6 @@ async def try_fallback_strategies(
             if count > 0:
                 element = locator.first
                 try:
-                    tag = await element.evaluate("el => el.tagName.toLowerCase()")
                     element_id = await element.evaluate("el => el.id")
                     if element_id:
                         selector = f"#{element_id}"
@@ -521,7 +520,6 @@ async def take_debug_screenshot(
         )
 
         if hasattr(context, "data_dir"):
-
             save_dir = context.data_dir / "screenshots"
             save_dir.mkdir(parents=True, exist_ok=True)
             filepath = save_dir / filename

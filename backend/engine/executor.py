@@ -8,8 +8,6 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
 from fastapi import WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
 
@@ -22,6 +20,8 @@ from .actions.utils import resolve_variables
 from .browser_manager import BrowserManager
 from .execution_recorder import ExecutionRecorder
 from .ai import detect_intervention
+
+logger = logging.getLogger(__name__)
 
 
 def topological_sort(nodes: List[Dict], edges: List[Dict]) -> List[str]:

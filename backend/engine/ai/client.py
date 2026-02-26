@@ -46,7 +46,8 @@ class AIClient:
         client_key = f"{config.provider}_{config.base_url}"
 
         if client_key not in self._clients:
-            client_config = self.config_manager.get_client_config(scenario)
+            # 获取客户端配置（如有需要可用于后续扩展）
+            # client_config = self.config_manager.get_client_config(scenario)
 
             self._clients[client_key] = AsyncOpenAI(
                 api_key=config.api_key,
