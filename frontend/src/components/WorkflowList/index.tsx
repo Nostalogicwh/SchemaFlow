@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Search, FileText, Plus, Trash2, Play } from 'lucide-react'
 import { useExecutionStore } from '@/stores/executionStore'
 import { useExecution } from '@/hooks/useExecution'
+import { workflowApi } from '@/api'
 import { Input } from '@/components/ui/Input'
 import { FormField } from '@/components/ui/FormField'
 import { Button } from '@/components/ui/Button'
@@ -41,17 +42,26 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
   const [nameError, setNameError] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const { setShowPanel, setCurrentWorkflowId } = useExecutionStore()
-  const { startExecution } = useExecution()
+  const { connect, startExecution } = useExecution()
 
-  const handleQuickExecute = (workflowId: string) => {
-    // 选中工作流
-    onSelect(workflowId)
-    // 设置当前工作流ID
-    setCurrentWorkflowId(workflowId)
-    // 显示执行面板
-    setShowPanel(true)
-    // 开始执行
-    startExecution(workflowId, 'headless')
+  const handleQuickExecute = async (workflowId: string) => {
+    try {
+      // 选中工作流
+      onSelect(workflowId)
+      // 调用API获取execution_id
+      const { execution_id } = await workflowApi.execute(workflowId)
+      // 建立WebSocket连接
+      connect(execution_id, workflowId)
+      // 设置当前工作流ID
+      setCurrentWorkflowId(workflowId)
+      // 显示执行面板
+      setShowPanel(true)
+      // 延迟后开始执行，等待连接建立
+      setTimeout(() => startExecution(workflowId, 'headless'), 500)
+    } catch (error) {
+      console.error('快速执行失败:', error)
+      toast.error('执行工作流失败')
+    }
   }
 
   const handleOpenCreateModal = () => {
@@ -225,22 +235,21 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                   </div>
                   
                   {/* 右侧：操作按钮 */}
-                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {/* 运行按钮 - 带文字 */}
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      icon={<Play className="w-3.5 h-3.5" />}
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* 运行按钮 - 仅图标 */}
+                    <button
                       onClick={(e) => {
                         e.stopPropagation()
                         handleQuickExecute(workflow.id)
                       }}
+                      className="p-1.5 rounded text-neutral-500 hover:text-green-600 hover:bg-green-50 transition-colors"
                       title="运行工作流"
+                      aria-label={`运行工作流: ${workflow.name}`}
                     >
-                      运行
-                    </Button>
+                      <Play className="w-4 h-4" />
+                    </button>
                     
-                    {/* 删除按钮 - 仅图标，hover时显示 */}
+                    {/* 删除按钮 - 仅图标 */}
                     <button
                       onClick={(e) => handleDelete(workflow.id, e as React.MouseEvent)}
                       className="p-1.5 rounded text-neutral-400 hover:text-red-500 hover:bg-red-50 transition-colors"
