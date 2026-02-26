@@ -1,7 +1,7 @@
 """执行记录器 - 负责执行记录的构建和持久化。"""
 
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from .context import ExecutionContext, NodeExecutionRecord
 from .constants import NodeStatus

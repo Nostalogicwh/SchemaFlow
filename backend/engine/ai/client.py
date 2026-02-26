@@ -3,16 +3,13 @@
 提供统一的接口来调用不同场景的AI模型，自动根据场景选择配置。
 """
 
-import asyncio
 import logging
-from typing import Dict, Any, Optional, AsyncGenerator
+from typing import Dict, Any, Optional
 from openai import AsyncOpenAI, APIError, RateLimitError, APITimeoutError
 
 from config.ai_models import (
-    AIModelConfigManager,
     ScenarioType,
     get_ai_config_manager,
-    get_client_config,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,7 +46,8 @@ class AIClient:
         client_key = f"{config.provider}_{config.base_url}"
 
         if client_key not in self._clients:
-            client_config = self.config_manager.get_client_config(scenario)
+            # 获取客户端配置（如有需要可用于后续扩展）
+            # client_config = self.config_manager.get_client_config(scenario)
 
             self._clients[client_key] = AsyncOpenAI(
                 api_key=config.api_key,

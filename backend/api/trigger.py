@@ -4,12 +4,16 @@ POST /api/trigger/{workflow_id} - 触发工作流执行
 GET  /api/trigger/{execution_id}/result - 获取执行结果
 """
 
-from fastapi import APIRouter, Header, HTTPException, Depends
-from typing import Optional, Dict, Any
+from fastapi import APIRouter, Header, Depends
+from typing import Optional, Dict, Any, TYPE_CHECKING
 from pydantic import BaseModel
 
 from .auth import verify_api_key
 from .exceptions import APIException
+
+if TYPE_CHECKING:
+    from engine.executor import WorkflowExecutor
+    from engine.context import ExecutionContext
 
 router = APIRouter(prefix="/api/trigger", tags=["trigger"])
 

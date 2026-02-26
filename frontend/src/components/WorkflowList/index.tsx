@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Search, FileText, Plus, Trash2, Play } from 'lucide-react'
 import { useExecutionStore } from '@/stores/executionStore'
 import { useExecution } from '@/hooks/useExecution'
+import { workflowApi } from '@/api'
 import { Input } from '@/components/ui/Input'
 import { FormField } from '@/components/ui/FormField'
 import { Button } from '@/components/ui/Button'
@@ -41,17 +42,26 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
   const [nameError, setNameError] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const { setShowPanel, setCurrentWorkflowId } = useExecutionStore()
-  const { startExecution } = useExecution()
+  const { connect, startExecution } = useExecution()
 
-  const handleQuickExecute = (workflowId: string) => {
-    // 选中工作流
-    onSelect(workflowId)
-    // 设置当前工作流ID
-    setCurrentWorkflowId(workflowId)
-    // 显示执行面板
-    setShowPanel(true)
-    // 开始执行
-    startExecution(workflowId, 'headless')
+  const handleQuickExecute = async (workflowId: string) => {
+    try {
+      // 选中工作流
+      onSelect(workflowId)
+      // 调用API获取execution_id
+      const { execution_id } = await workflowApi.execute(workflowId)
+      // 建立WebSocket连接
+      connect(execution_id, workflowId)
+      // 设置当前工作流ID
+      setCurrentWorkflowId(workflowId)
+      // 显示执行面板
+      setShowPanel(true)
+      // 延迟后开始执行，等待连接建立
+      setTimeout(() => startExecution(workflowId, 'headless'), 500)
+    } catch (error) {
+      console.error('快速执行失败:', error)
+      toast.error('执行工作流失败')
+    }
   }
 
   const handleOpenCreateModal = () => {
@@ -59,7 +69,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
     setNewWorkflowDescription('')
     setNameError('')
     setIsCreateModalOpen(true)
-    onCreate?.()
+    // 不再调用 onCreate?.()，避免触发 App.tsx 的 prompt
   }
 
   const handleCloseCreateModal = () => {
@@ -189,7 +199,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                 key={workflow.id}
                 onClick={() => onSelect(workflow.id)}
                 className={`
-                  group relative px-3 py-2.5 mx-2 rounded-lg cursor-pointer transition-all duration-200
+                  group relative px-3 py-3 mx-2 rounded-lg cursor-pointer transition-all duration-200
                   ${selectedId === workflow.id 
                     ? 'bg-blue-50 shadow-sm' 
                     : 'hover:bg-neutral-100'
@@ -202,7 +212,8 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                   ${selectedId === workflow.id ? 'bg-blue-500 opacity-100' : 'bg-blue-400 opacity-0 group-hover:opacity-50'}
                 `} />
                 
-                <div className="flex justify-between items-start pl-2">
+                <div className="flex justify-between items-start pl-2 gap-3">
+                  {/* 左侧：工作流信息 */}
                   <div className="flex-1 min-w-0">
                     <h3 className={`
                       font-medium text-sm truncate transition-colors
@@ -216,36 +227,37 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                       </p>
                     )}
                     {workflow.updated_at && (
-                      <p className="text-xs text-neutral-400 mt-1.5 flex items-center gap-1">
+                      <p className="text-xs text-neutral-400 mt-1 flex items-center gap-1">
                         <span className="w-1 h-1 rounded-full bg-neutral-300" />
                         {formatRelativeTime(workflow.updated_at)}
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      iconOnly
+                  
+                  {/* 右侧：操作按钮 */}
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* 运行按钮 - 仅图标 */}
+                    <button
                       onClick={(e) => {
                         e.stopPropagation()
                         handleQuickExecute(workflow.id)
                       }}
-                      title="快速执行"
-                      aria-label={`快速执行: ${workflow.name}`}
+                      className="p-1.5 rounded text-neutral-500 hover:text-green-600 hover:bg-green-50 transition-colors"
+                      title="运行工作流"
+                      aria-label={`运行工作流: ${workflow.name}`}
                     >
-                      <Play className="w-3.5 h-3.5 text-neutral-400 hover:text-green-500" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      iconOnly
+                      <Play className="w-4 h-4" />
+                    </button>
+                    
+                    {/* 删除按钮 - 仅图标 */}
+                    <button
                       onClick={(e) => handleDelete(workflow.id, e as React.MouseEvent)}
+                      className="p-1.5 rounded text-neutral-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                       title="删除工作流"
                       aria-label={`删除工作流: ${workflow.name}`}
                     >
-                      <Trash2 className="w-3.5 h-3.5 text-neutral-400 hover:text-red-500" />
-                    </Button>
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>

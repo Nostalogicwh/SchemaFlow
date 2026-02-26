@@ -7,7 +7,7 @@
 import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch, call
+from unittest.mock import MagicMock, AsyncMock
 import pytest
 
 # 添加项目根目录到路径

@@ -1,12 +1,13 @@
 """SchemaFlow 后端主入口。"""
 
 import logging
+import sys
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.exceptions import RequestValidationError
-from pathlib import Path
-import sys
 
 # 配置日志系统
 from config import setup_logging
@@ -17,10 +18,15 @@ logger = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from api import workflows, actions, execution, ai_generate
-from api.exceptions import APIException
-from engine.actions import base, browser, data, control
-from fastapi.responses import FileResponse
+from api import workflows, actions, execution, ai_generate  # noqa: E402
+from api.exceptions import APIException  # noqa: E402
+
+# 导入动作模块以触发注册（这些导入会触发 @register_action 装饰器）
+from engine.actions import base  # noqa: E402, F401
+from engine.actions import browser  # noqa: E402, F401
+from engine.actions import control  # noqa: E402, F401
+from engine.actions import data  # noqa: E402, F401
+from engine.actions import ai  # noqa: E402, F401
 
 # 创建 FastAPI 应用
 app = FastAPI(

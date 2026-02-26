@@ -13,10 +13,9 @@ AI干预检测模块 - 使用轻量级LLM检测页面是否需要人工干预
 - 所有注释使用中文
 """
 
-import base64
 import json
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 import httpx
 
 from config import get_settings

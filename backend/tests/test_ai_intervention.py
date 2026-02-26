@@ -8,9 +8,6 @@ AI干预功能验证脚本
 4. 执行器能正确导入并包含_check_ai_intervention方法
 """
 
-import sys
-import asyncio
-from pathlib import Path
 
 
 def test_node_schemas():
@@ -18,11 +15,6 @@ def test_node_schemas():
     print("测试1: 验证节点Schema包含AI干预配置...")
 
     # 导入所有action模块触发注册
-    from engine.actions import base
-    from engine.actions import browser
-    from engine.actions import control
-    from engine.actions import ai
-    from engine.actions import data
     from engine.actions import registry
 
     schemas = registry.get_all_schemas()
@@ -47,8 +39,6 @@ def test_ai_intervention_detector():
     from engine.ai import (
         AIInterventionDetector,
         InterventionType,
-        detect_intervention,
-        get_detector,
     )
 
     # 测试类和方法存在
@@ -112,7 +102,7 @@ def test_registry():
     assert schema["default"] == False
 
     print("  ✓ AI_INTERVENTION_SCHEMA 定义正确")
-    print(f"    - 字段: enable_ai_intervention")
+    print("    - 字段: enable_ai_intervention")
     print(f"    - 类型: {schema['type']}")
     print(f"    - 默认值: {schema['default']}")
     print(f"    - 描述: {schema['description']}")

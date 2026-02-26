@@ -1,14 +1,10 @@
 """pytest配置和共享fixtures"""
 
-import asyncio
 import pytest
 import pytest_asyncio
 import sys
-import tempfile
-import os
 from pathlib import Path
 from httpx import AsyncClient, ASGITransport
-from unittest.mock import patch
 
 # 添加项目根目录到路径
 project_root = Path(__file__).parent.parent

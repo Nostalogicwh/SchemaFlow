@@ -98,7 +98,8 @@ async def execution_websocket(
                 node_id = data.get("node_id")
                 target_description = data.get("target_description")
                 saved_selector = data.get("saved_selector")
-                enable_ai_fallback = data.get("enable_ai_fallback", True)
+                # TODO: 将 enable_ai_fallback 传递给 debug_locator
+                # enable_ai_fallback = data.get("enable_ai_fallback", True)
 
                 # 获取当前执行上下文
                 exec_context = None

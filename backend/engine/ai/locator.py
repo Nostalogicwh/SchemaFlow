@@ -10,14 +10,13 @@
 4. 混合定位模式（CSS选择器优先 + AI后备）
 """
 
-import asyncio
 import json
 import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass
-from playwright.async_api import Page, Locator, TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import Page, Locator
 from openai import APIError, RateLimitError, APITimeoutError
 
 
@@ -467,7 +466,6 @@ async def try_fallback_strategies(
             if count > 0:
                 element = locator.first
                 try:
-                    tag = await element.evaluate("el => el.tagName.toLowerCase()")
                     element_id = await element.evaluate("el => el.id")
                     if element_id:
                         selector = f"#{element_id}"
@@ -522,8 +520,6 @@ async def take_debug_screenshot(
         )
 
         if hasattr(context, "data_dir"):
-            import os
-
             save_dir = context.data_dir / "screenshots"
             save_dir.mkdir(parents=True, exist_ok=True)
             filepath = save_dir / filename
@@ -762,7 +758,7 @@ class HybridElementLocator:
                 await self.context.log(
                     "info", f"使用已保存的选择器定位成功: {saved_selector}"
                 )
-                _debug_log(f"CSS选择器验证通过，返回css结果")
+                _debug_log("CSS选择器验证通过，返回css结果")
                 return LocationResult(
                     selector=saved_selector,
                     confidence=1.0,
@@ -773,14 +769,14 @@ class HybridElementLocator:
                 await self.context.log(
                     "warning", f"已保存的选择器失效: {saved_selector}"
                 )
-                _debug_log(f"CSS选择器验证失败，检查是否启用AI后备")
+                _debug_log("CSS选择器验证失败，检查是否启用AI后备")
 
         if enable_ai_fallback:
             await self.context.log("info", f"启用AI定位: {target_description}")
             _debug_log(f"启用AI定位: {target_description}")
             return await self._locate_with_ai(target_description, timeout)
 
-        _debug_log(f"无法定位元素，且AI后备未启用")
+        _debug_log("无法定位元素，且AI后备未启用")
         raise ValueError(f"无法定位元素: {target_description}")
 
     async def _verify_selector(self, selector: str, timeout: int) -> bool:

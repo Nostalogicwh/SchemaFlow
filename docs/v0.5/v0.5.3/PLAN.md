@@ -115,6 +115,17 @@
 | `types/execution.ts` | `backend/engine/context.py` |
 | `api/index.ts` | `backend/api/*.py` |
 
+**发现的问题**:
+1. **NodeStatus枚举不一致**: 
+   - 前端: `'idle' \| 'running' \| 'completed' \| 'failed'`
+   - 后端: `PENDING, RUNNING, COMPLETED, FAILED, SKIPPED`
+2. **缺少Pydantic模型**: 后端API直接使用`Dict[str, Any]`，无运行时类型检查
+
+**建议后续版本处理**:
+- 创建 `backend/models/schemas.py` 定义Pydantic模型
+- 统一NodeStatus枚举值
+- 添加API请求/响应模型验证
+
 **验收标准**:
 - [ ] 字段命名一致
 - [ ] 必填/可选字段匹配
@@ -378,14 +389,18 @@ scripts/
 - [ ] Day 4: 修复工作流列表误触发问题
 - [ ] Day 5: 检查前后端字段对齐
 
-### 第2周（Phase 3）
-- [ ] Day 1-2: 日志文件管理
-- [ ] Day 3-4: 简化无意义检查
-- [ ] Day 5: 国际化（可选，时间不足可推迟）
+### 已完成（当前版本）
+- [x] P0: 修复工作流列表误触发执行问题
+- [x] P1: 前端代码补充注释
+- [x] P1: 后端代码检查重构
+- [x] P1: 检查前后端字段对齐（发现问题并记录）
+- [x] P1: 一键部署脚本
+- [x] P2: 日志文件管理
 
-### 第3周（Phase 4）
-- [ ] Day 1-2: 一键部署脚本
-- [ ] Day 3-5: 用户干预节点增强
+### 推迟到 v0.5.4（工作量较大）
+- [ ] P2: 简化无意义检查
+- [ ] P2: 用户干预节点增强（跳过+失败回退）
+- [ ] P3: 国际化（前端UI + README）
 
 ---
 

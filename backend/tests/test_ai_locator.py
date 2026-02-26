@@ -1,11 +1,7 @@
 """AI元素定位修复测试。"""
 
 import pytest
-import asyncio
-import sys
-from pathlib import Path
-from unittest.mock import Mock, AsyncMock, MagicMock, patch
-from typing import Any
+from unittest.mock import Mock, AsyncMock
 
 
 # 测试wait_for_page_stability
@@ -147,7 +143,7 @@ async def test_take_debug_screenshot():
 @pytest.mark.asyncio
 async def test_locate_with_ai_full_flow():
     """测试完整的AI定位流程。"""
-    from engine.ai.locator import HybridElementLocator, LocationResult
+    from engine.ai.locator import HybridElementLocator
 
     page = Mock()
     page.url = "https://example.com"

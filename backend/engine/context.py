@@ -11,7 +11,7 @@ import base64
 
 from fastapi import WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
-from openai import AuthenticationError, APIError, OpenAIError, AsyncOpenAI
+from openai import AuthenticationError, APIError, OpenAIError
 
 from .constants import NodeStatus, WSMessageType
 

@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  schemaflow:
+    build:
+      context: ../..
+      dockerfile: scripts/docker/Dockerfile
+    container_name: schemaflow
+    ports:
+      - "8000:8000"
+    volumes:
+      # 数据持久化
+      - ./data:/app/data
+      # 日志
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 可选：Playwright浏览器服务（用于远程浏览器）
+  # playwright:
+  #   image: mcr.microsoft.com/playwright:v1.40.0-jammy
+  #   container_name: schemaflow-browser
+  #   command: npx playwright run-server --port 3000
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright

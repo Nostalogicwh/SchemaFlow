@@ -1,6 +1,5 @@
 """登录态检测模块 - 检测页面是否处于已登录状态。"""
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
