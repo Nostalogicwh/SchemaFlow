@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from api import workflows, actions, execution, ai_generate
-from api.exceptions import APIException
+from api import workflows, actions, execution, ai_generate  # noqa: E402
+from api.exceptions import APIException  # noqa: E402
 
 # 创建 FastAPI 应用
 app = FastAPI(
