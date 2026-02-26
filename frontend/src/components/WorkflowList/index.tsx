@@ -222,9 +222,9 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-0.5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                  <div className="flex items-center gap-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                     <Button
-                      variant="ghost"
+                      variant="secondary"
                       size="sm"
                       iconOnly
                       onClick={(e) => {
@@ -233,20 +233,20 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                       }}
                       title="快速执行"
                       aria-label={`快速执行: ${workflow.name}`}
-                      className="pointer-events-none group-hover:pointer-events-auto"
+                      className="pointer-events-none group-hover:pointer-events-auto bg-white border border-neutral-200 hover:border-green-300 hover:bg-green-50"
                     >
-                      <Play className="w-3.5 h-3.5 text-neutral-400 hover:text-green-500" />
+                      <Play className="w-3.5 h-3.5 text-neutral-600 hover:text-green-600" />
                     </Button>
                     <Button
-                      variant="ghost"
+                      variant="secondary"
                       size="sm"
                       iconOnly
                       onClick={(e) => handleDelete(workflow.id, e as React.MouseEvent)}
                       title="删除工作流"
                       aria-label={`删除工作流: ${workflow.name}`}
-                      className="pointer-events-none group-hover:pointer-events-auto"
+                      className="pointer-events-none group-hover:pointer-events-auto bg-white border border-neutral-200 hover:border-red-300 hover:bg-red-50"
                     >
-                      <Trash2 className="w-3.5 h-3.5 text-neutral-400 hover:text-red-500" />
+                      <Trash2 className="w-3.5 h-3.5 text-neutral-600 hover:text-red-600" />
                     </Button>
                   </div>
                 </div>
