@@ -189,7 +189,7 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                 key={workflow.id}
                 onClick={() => onSelect(workflow.id)}
                 className={`
-                  group relative px-3 py-2.5 mx-2 rounded-lg cursor-pointer transition-all duration-200
+                  group relative px-3 py-3 mx-2 rounded-lg cursor-pointer transition-all duration-200
                   ${selectedId === workflow.id 
                     ? 'bg-blue-50 shadow-sm' 
                     : 'hover:bg-neutral-100'
@@ -202,7 +202,8 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                   ${selectedId === workflow.id ? 'bg-blue-500 opacity-100' : 'bg-blue-400 opacity-0 group-hover:opacity-50'}
                 `} />
                 
-                <div className="flex justify-between items-start pl-2">
+                <div className="flex justify-between items-start pl-2 gap-3">
+                  {/* 左侧：工作流信息 */}
                   <div className="flex-1 min-w-0">
                     <h3 className={`
                       font-medium text-sm truncate transition-colors
@@ -216,38 +217,38 @@ export function WorkflowList({ selectedId, onSelect, onCreate }: WorkflowListPro
                       </p>
                     )}
                     {workflow.updated_at && (
-                      <p className="text-xs text-neutral-400 mt-1.5 flex items-center gap-1">
+                      <p className="text-xs text-neutral-400 mt-1 flex items-center gap-1">
                         <span className="w-1 h-1 rounded-full bg-neutral-300" />
                         {formatRelativeTime(workflow.updated_at)}
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
+                  
+                  {/* 右侧：操作按钮 */}
+                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* 运行按钮 - 带文字 */}
                     <Button
-                      variant="secondary"
+                      variant="primary"
                       size="sm"
-                      iconOnly
+                      icon={<Play className="w-3.5 h-3.5" />}
                       onClick={(e) => {
                         e.stopPropagation()
                         handleQuickExecute(workflow.id)
                       }}
-                      title="快速执行"
-                      aria-label={`快速执行: ${workflow.name}`}
-                      className="bg-white border border-neutral-300 shadow-sm hover:border-green-400 hover:bg-green-50 hover:text-green-600"
+                      title="运行工作流"
                     >
-                      <Play className="w-3.5 h-3.5 text-neutral-500" />
+                      运行
                     </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      iconOnly
+                    
+                    {/* 删除按钮 - 仅图标，hover时显示 */}
+                    <button
                       onClick={(e) => handleDelete(workflow.id, e as React.MouseEvent)}
+                      className="p-1.5 rounded text-neutral-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                       title="删除工作流"
                       aria-label={`删除工作流: ${workflow.name}`}
-                      className="bg-white border border-neutral-300 shadow-sm hover:border-red-400 hover:bg-red-50 hover:text-red-600"
                     >
-                      <Trash2 className="w-3.5 h-3.5 text-neutral-500" />
-                    </Button>
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>
